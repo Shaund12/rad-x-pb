@@ -1,0 +1,258 @@
+<Window x:Class="RadXPriceBot.PairDetailsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Pair Details" 
+        Height="500" Width="600"
+        WindowStartupLocation="CenterOwner"
+        Background="{StaticResource PanelBgBrush}"
+        Foreground="{StaticResource PrimaryBrush}"
+        FontFamily="Segoe UI">
+
+    <Border Style="{StaticResource CardPanelStyle}" Margin="10">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <!-- Header -->
+            <Grid Grid.Row="0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <TextBlock x:Name="PairNameTextBlock" 
+                           Text="Token Pair Details" 
+                           Foreground="{StaticResource AccentBrush}"
+                           FontSize="20" 
+                           FontWeight="Bold"
+                           Grid.Column="0"/>
+
+                <TextBlock x:Name="LastUpdatedTextBlock"
+                           Text="Last Updated: Never" 
+                           Grid.Column="1"
+                           Foreground="{StaticResource HighlightBrush}"
+                           HorizontalAlignment="Right"
+                           VerticalAlignment="Bottom"
+                           Margin="0,0,0,3"/>
+            </Grid>
+
+            <!-- Content -->
+            <ScrollViewer Grid.Row="1" Margin="0,15,0,15" VerticalScrollBarVisibility="Auto">
+                <StackPanel>
+                    <!-- Price Information -->
+                    <Border Background="#15FFFFFF" BorderThickness="0,0,0,1" BorderBrush="#30FFFFFF" Padding="0,0,0,10" Margin="0,0,0,10">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Grid.Column="0" Margin="0,0,10,0">
+                                <TextBlock Text="Price Information" 
+                                           FontWeight="Bold" 
+                                           FontSize="16" 
+                                           Foreground="{StaticResource HighlightBrush}"
+                                           Margin="0,0,0,8"/>
+
+                                <Grid Margin="0,4">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="130"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="Current Price:" FontWeight="Bold"/>
+                                    <TextBlock Grid.Column="1" x:Name="CurrentPriceTextBlock" Text="Loading..."/>
+                                </Grid>
+
+                                <Grid Margin="0,4">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="130"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="USD Price:" FontWeight="Bold"/>
+                                    <TextBlock Grid.Column="1" x:Name="UsdPriceTextBlock" Text="Loading..."/>
+                                </Grid>
+
+                                <Grid Margin="0,4">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="130"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="Reverse Rate:" FontWeight="Bold"/>
+                                    <TextBlock Grid.Column="1" x:Name="ReversePriceTextBlock" Text="Loading..."/>
+                                </Grid>
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="1" Margin="10,0,0,0">
+                                <TextBlock Text="Market Information" 
+                                           FontWeight="Bold" 
+                                           FontSize="16" 
+                                           Foreground="{StaticResource HighlightBrush}"
+                                           Margin="0,0,0,8"/>
+
+                                <Grid Margin="0,4">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="130"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="Market Cap:" FontWeight="Bold"/>
+                                    <TextBlock Grid.Column="1" x:Name="MarketCapTextBlock" Text="Loading..."/>
+                                </Grid>
+
+                                <Grid Margin="0,4">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="130"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="24h Volume:" FontWeight="Bold"/>
+                                    <TextBlock Grid.Column="1" x:Name="VolumeTextBlock" Text="Loading..."/>
+                                </Grid>
+
+                                <Grid Margin="0,4">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="130"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="Holder Count:" FontWeight="Bold"/>
+                                    <TextBlock Grid.Column="1" x:Name="HolderCountTextBlock" Text="Loading..."/>
+                                </Grid>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <!-- Liquidity Information -->
+                    <Border Background="#15FFFFFF" BorderThickness="0,0,0,1" BorderBrush="#30FFFFFF" Padding="0,0,0,10" Margin="0,0,0,10">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Grid.Column="0" Margin="0,0,10,0">
+                                <TextBlock Text="Liquidity Information" 
+                                           FontWeight="Bold" 
+                                           FontSize="16" 
+                                           Foreground="{StaticResource HighlightBrush}"
+                                           Margin="0,0,0,8"/>
+
+                                <Grid Margin="0,4">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="130"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="Total Liquidity:" FontWeight="Bold"/>
+                                    <TextBlock Grid.Column="1" x:Name="TotalLiquidityTextBlock" Text="Loading..."/>
+                                </Grid>
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="1" Margin="10,0,0,0">
+                                <TextBlock Text="Reserve Information" 
+                                           FontWeight="Bold" 
+                                           FontSize="16" 
+                                           Foreground="{StaticResource HighlightBrush}"
+                                           Margin="0,0,0,8"/>
+
+                                <Grid Margin="0,4">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="130"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" x:Name="Reserve0LabelTextBlock" Text="Token0 Reserve:" FontWeight="Bold"/>
+                                    <TextBlock Grid.Column="1" x:Name="Reserve0TextBlock" Text="Loading..."/>
+                                </Grid>
+
+                                <Grid Margin="0,4">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="130"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" x:Name="Reserve1LabelTextBlock" Text="Token1 Reserve:" FontWeight="Bold"/>
+                                    <TextBlock Grid.Column="1" x:Name="Reserve1TextBlock" Text="Loading..."/>
+                                </Grid>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <!-- Token Information -->
+                    <Border Background="#15FFFFFF" BorderThickness="0,0,0,1" BorderBrush="#30FFFFFF" Padding="0,0,0,10" Margin="0,0,0,10">
+                        <StackPanel>
+                            <TextBlock Text="Token Supply Information" 
+                                       FontWeight="Bold" 
+                                       FontSize="16" 
+                                       Foreground="{StaticResource HighlightBrush}"
+                                       Margin="0,0,0,8"/>
+
+                            <Grid Margin="0,4">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="130"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="Total Supply:" FontWeight="Bold"/>
+                                <TextBlock Grid.Column="1" x:Name="TotalSupplyTextBlock" Text="Loading..."/>
+                            </Grid>
+
+                            <Grid Margin="0,4">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="130"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="Circulating Supply:" FontWeight="Bold"/>
+                                <TextBlock Grid.Column="1" x:Name="CirculatingSupplyTextBlock" Text="Loading..."/>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Contract Addresses -->
+                    <Border Background="#15FFFFFF" Padding="0,0,0,10">
+                        <StackPanel>
+                            <TextBlock Text="Contract Addresses" 
+                                       FontWeight="Bold" 
+                                       FontSize="16" 
+                                       Foreground="{StaticResource HighlightBrush}"
+                                       Margin="0,0,0,8"/>
+
+                            <Grid Margin="0,4">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="130"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="Pair Address:" FontWeight="Bold"/>
+                                <TextBox Grid.Column="1" x:Name="PairAddressTextBox" Text="Loading..." 
+                                         IsReadOnly="True" Background="Transparent" BorderThickness="0"/>
+                            </Grid>
+
+                            <Grid Margin="0,4">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="130"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" x:Name="Token0LabelTextBlock" Text="Token0 Address:" FontWeight="Bold"/>
+                                <TextBox Grid.Column="1" x:Name="Token0AddressTextBox" Text="Loading..." 
+                                         IsReadOnly="True" Background="Transparent" BorderThickness="0"/>
+                            </Grid>
+
+                            <Grid Margin="0,4">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="130"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" x:Name="Token1LabelTextBlock" Text="Token1 Address:" FontWeight="Bold"/>
+                                <TextBox Grid.Column="1" x:Name="Token1AddressTextBox" Text="Loading..." 
+                                         IsReadOnly="True" Background="Transparent" BorderThickness="0"/>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </ScrollViewer>
+
+            <!-- Footer/Buttons -->
+            <Button Grid.Row="2" Content="Close" Width="120" Height="35" 
+                    Style="{StaticResource UtilityButtonStyle}" 
+                    HorizontalAlignment="Right"
+                    Margin="0,5,0,0"
+                    Click="CloseButton_Click"/>
+        </Grid>
+    </Border>
+</Window>
