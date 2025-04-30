@@ -2,6 +2,7 @@
 using System;
 using System.Windows;
 using System.Windows.Controls;
+using System.ComponentModel;  // Add this for CancelEventArgs
 using RadXPriceBot.Services;
 
 namespace RadXPriceBot
@@ -15,6 +16,19 @@ namespace RadXPriceBot
             InitializeComponent();
             _settings = settings;
             LoadSettingsToUI();
+            
+            // Subscribe to the Closing event
+            this.Closing += SettingsWindow_Closing;
+        }
+
+        private void SettingsWindow_Closing(object sender, CancelEventArgs e)
+        {
+            // If MinimizeOnClose is enabled and the DialogResult isn't set (user clicked X)
+            if (_settings.MinimizeOnClose && !this.DialogResult.HasValue)
+            {
+                e.Cancel = true;  // Cancel the close
+                this.Hide();      // Hide the window instead
+            }
         }
 
         private void LoadSettingsToUI()
@@ -26,6 +40,7 @@ namespace RadXPriceBot
             FactoryAddressTextBox.Text = _settings.FactoryAddress;
             BotNicknameTextBox.Text = _settings.BotNickname;
             CustomStatusTextBox.Text = _settings.CustomStatus;
+            MinimizeOnCloseCheckBox.IsChecked = _settings.MinimizeOnClose; // Add this line
 
             foreach (ComboBoxItem item in StatusTypeComboBox.Items)
             {
@@ -52,6 +67,7 @@ namespace RadXPriceBot
             _settings.BotNickname = BotNicknameTextBox.Text.Trim();
             _settings.CustomStatus = CustomStatusTextBox.Text.Trim();
             _settings.StatusType = (StatusTypeComboBox.SelectedItem as ComboBoxItem)?.Content as string ?? "Price";
+            _settings.MinimizeOnClose = MinimizeOnCloseCheckBox.IsChecked ?? true; // Add this line
 
             SettingsService.SaveSettings(_settings);
         }

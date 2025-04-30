@@ -45,6 +45,10 @@
 
                 <TextBlock Text="Custom Status:"/>
                 <TextBox x:Name="CustomStatusTextBox" Margin="0,4,0,10"/>
+                
+                <!-- Add the checkbox for minimize-on-close -->
+                <CheckBox x:Name="MinimizeOnCloseCheckBox" Content="Minimize instead of close" 
+                          Margin="0,10,0,10" IsChecked="True"/>
             </StackPanel>
         </ScrollViewer>
 

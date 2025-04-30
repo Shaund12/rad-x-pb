@@ -17,6 +17,11 @@
         <SolidColorBrush x:Key="PanelBgBrush" Color="{StaticResource PanelBgColor}"/>
         <SolidColorBrush x:Key="ButtonBgBrush" Color="{StaticResource ButtonBgColor}"/>
 
+        <!-- Token Images - Using online URLs -->
+        <ImageSource x:Key="wVTRUImage">https://swap.vitruveo.xyz/images/coins/wVTRU.png</ImageSource>
+        <ImageSource x:Key="VTROImage">https://swap.vitruveo.xyz/images/coins/VTRO.png</ImageSource>
+        <ImageSource x:Key="USDCPolImage">https://swap.vitruveo.xyz/images/coins/USDC.pol.png</ImageSource>
+
         <!-- Cel-Shaded Button Style -->
         <Style TargetType="Button">
             <Setter Property="Background"   Value="{StaticResource ButtonBgBrush}"/>

@@ -46,8 +46,24 @@ namespace RadXPriceBot.Services
         // New property to store multiple bot configurations
         public List<BotConfig> BotConfigurations { get; set; } = new List<BotConfig>();
         // Add this property to BotSettings class
-        public double DpiScaling { get; set; } = 1.0; // Default is 100%
+        // UI Settings
+        public double DpiScaling { get; set; } = 1.0;
+        public bool MinimizeOnClose { get; set; } = true;
+        public bool StartWithWindows { get; set; } = false;
+        public bool StartMinimized { get; set; } = false;
 
+        // Data Settings
+        public int DefaultRefreshInterval { get; set; } = 30; // In seconds
+        public int DefaultChartTimeRange { get; set; } = 168; // In hours (1 week)
+
+        // Notification Settings
+        public bool EnableNotifications { get; set; } = true;
+        public bool NotifyOnPriceAlerts { get; set; } = true;
+        public bool NotifyOnErrors { get; set; } = true;
+
+        // Advanced Settings
+        public bool? DebugMode { get; set; } = false;
+        public bool? SaveLogsToFile { get; set; } = true;
     }
 
     public static class SettingsService

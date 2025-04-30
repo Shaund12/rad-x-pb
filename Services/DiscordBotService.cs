@@ -1,4 +1,5 @@
 ﻿using System;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Discord;
@@ -36,6 +37,9 @@ namespace RadXPriceBot.Services
         private CancellationTokenSource _cts;
         private bool _isRunning;
 
+        // Dictionary to map token symbols to their image URLs
+        private Dictionary<string, string> _tokenImageUrls = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
         // Properties for embed functionality
         private ulong _embedChannelId;
         private int _embedIntervalMinutes = 0; // 0 means disabled
@@ -48,13 +52,10 @@ namespace RadXPriceBot.Services
         private ulong _swapNotificationChannelId;
         private bool _monitorBuyTransactions = false;
         private System.Timers.Timer _transactionMonitorTimer;
-        // Fix 1: Change the readonly field to a regular field
-        // Remove 'readonly' from the declaration
         private int _transactionCheckIntervalMs = 15000; // Default to check every 15 seconds
 
         private List<string> _lastProcessedTransactions = new List<string>();
         private const int MAX_STORED_TX_HASHES = 100; // Store only last 100 processed transactions
-
 
         private Dictionary<string, decimal> _lastPrices;
 
@@ -78,6 +79,74 @@ namespace RadXPriceBot.Services
             _customStatus = customStatus;
             _updateIntervalMs = updateIntervalMs;
             _isRunning = false;
+
+            // Initialize token image URLs
+            InitializeTokenImageUrls();
+        }
+
+        // Method to initialize token image URLs
+        private void InitializeTokenImageUrls()
+        {
+            try
+            {
+                // Define the URL mapping for token symbols
+                _tokenImageUrls["WVTRU"] = GetTokenImageUrl("wVTRU.png");
+                _tokenImageUrls["VTRO"] = GetTokenImageUrl("VTRO.png");
+                _tokenImageUrls["USDC.POL"] = GetTokenImageUrl("USDC.pol.png");
+
+                OnLog($"Initialized token image URLs for {_tokenImageUrls.Count} tokens");
+            }
+            catch (Exception ex)
+            {
+                OnLog($"Error initializing token image URLs: {ex.Message}");
+            }
+        }
+
+        // Method to get token image URL from resource file
+        // Method to get token image URL from embedded resource
+        // Method to get token image URL for Discord embeds
+        private string GetTokenImageUrl(string fileName)
+        {
+            try
+            {
+                // Map filenames to the online URLs based on the filename
+                switch (fileName.ToLower())
+                {
+                    case "wvtru.png":
+                        return "https://swap.vitruveo.xyz/images/coins/wVTRU.png";
+
+                    case "vtro.png":
+                        return "https://swap.vitruveo.xyz/images/coins/VTRO.png";
+
+                    case "usdc.pol.png":
+                        return "https://swap.vitruveo.xyz/images/coins/USDC.pol.png";
+
+                    default:
+                        // Default generic token icon
+                        return "https://i.imgur.com/gXdWwTR.png";
+                }
+            }
+            catch (Exception ex)
+            {
+                OnLog($"Error loading token image {fileName}: {ex.Message}");
+                return "https://i.imgur.com/gXdWwTR.png"; // Default fallback
+            }
+        }
+
+
+
+        // Modified method to get token thumbnail URL
+        private string GetTokenThumbnailUrl(string symbol)
+        {
+            // Try to get the image URL from the dictionary
+            if (symbol != null && _tokenImageUrls.TryGetValue(symbol, out string imageUrl) && !string.IsNullOrEmpty(imageUrl))
+            {
+                // Return the URL if found
+                return imageUrl;
+            }
+
+            // Default generic token icon
+            return "https://i.imgur.com/gXdWwTR.png";
         }
 
         public async Task StartAsync()
@@ -295,7 +364,7 @@ namespace RadXPriceBot.Services
 
         private async Task CheckForNewTransactionsAsync()
         {
-            if (!_monitorBuyTransactions || _swapNotificationChannelId == 0 || _client == null || _client.ConnectionState != ConnectionState.Connected)
+            if (_swapNotificationChannelId == 0 || _client == null || _client.ConnectionState != ConnectionState.Connected)
             {
                 return;
             }
@@ -321,14 +390,11 @@ namespace RadXPriceBot.Services
                         _lastProcessedTransactions.RemoveAt(0);
                     }
 
-                    // Only process buy transactions (token0 → token1)
-                    // In AMM context, token0 is usually the project token, token1 is the base pair (USDC, ETH, etc)
-                    // Fix 2: Change Amount to TokenAmount which is the property available in SwapTransaction
-                    if (swap.IsBuyTransaction && swap.TokenAmount > 0)
-
+                    // Send notification for both buys and sells if they have valid amounts
+                    if (swap.TokenAmount > 0)
                     {
                         await SendSwapNotificationAsync(swap);
-                        OnLog($"Sent swap notification for TX: {swap.TransactionHash}");
+                        OnLog($"Sent swap notification for TX: {swap.TransactionHash} ({(swap.IsBuyTransaction ? "Buy" : "Sell")})");
                     }
                 }
             }
@@ -337,6 +403,7 @@ namespace RadXPriceBot.Services
                 OnLog($"Error checking for transactions: {ex.Message}");
             }
         }
+
 
         private async Task SendSwapNotificationAsync(SwapTransaction swap)
         {
@@ -358,7 +425,9 @@ namespace RadXPriceBot.Services
         {
             // Determine if it's a buy or sell
             bool isBuy = swap.IsBuyTransaction;
-            Color color = isBuy ? new Color(46, 204, 113) : new Color(231, 76, 60); // Green for buy, red for sell
+
+            // Base colors - Green for buy, Red for sell
+            Color color = isBuy ? new Color(46, 204, 113) : new Color(231, 76, 60);
 
             // Format amounts with the proper number of decimals
             string token0Amount = FormatTokenAmount(swap.TokenAmount, swap.Token0Decimals);
@@ -371,15 +440,29 @@ namespace RadXPriceBot.Services
             string token0Emoji = GetTokenEmoji(swap.Token0Symbol);
             string token1Emoji = GetTokenEmoji(swap.Token1Symbol);
 
-            // Title based on swap type
-            string title = isBuy
-                ? $"{token0Emoji} New Buy Transaction {token0Emoji}"
-                : $"{token1Emoji} New Sell Transaction {token1Emoji}";
+            // Get the token thumbnail URL - use the primary token (token0 for buys, token1 for sells)
+            string tokenImageUrl = isBuy ?
+                GetTokenThumbnailUrl(swap.Token0Symbol) :
+                GetTokenThumbnailUrl(swap.Token1Symbol);
+
+            // Categorize transaction size and get appropriate emojis
+            (string sizeCategory, string sizeEmoji) = CategorizeTransactionSize(swap.UsdValue);
+
+            // Title based on swap type and size
+            string title;
+            if (isBuy)
+            {
+                title = $"{sizeEmoji} {sizeCategory} Buy: {token0Emoji} {swap.Token0Symbol}";
+            }
+            else
+            {
+                title = $"{sizeEmoji} {sizeCategory} Sell: {token0Emoji} {swap.Token0Symbol}";
+            }
 
             // Get block explorer URL
             string explorerUrl = $"https://explorer.vitruveo.xyz/tx/{swap.TransactionHash}";
 
-            // Create the embed
+            // Create the embed with attention-grabbing features
             var builder = new EmbedBuilder()
                 .WithTitle(title)
                 .WithColor(color)
@@ -389,14 +472,25 @@ namespace RadXPriceBot.Services
                     footer.WithIconUrl("https://i.imgur.com/gXdWwTR.png");
                 });
 
-            // Symbol formatting
+            // Add the token image as thumbnail if available
+            if (!string.IsNullOrEmpty(tokenImageUrl))
+            {
+                builder.WithThumbnailUrl(tokenImageUrl);
+            }
+
+            // Add author with wallet info
+            builder.WithAuthor(author => {
+                author.Name = $"Trader: {FormatAddress(swap.FromAddress)}";
+            });
+
+            // Symbol formatting for display
             string token0DisplayName = $"{token0Emoji} {swap.Token0Symbol}";
             string token1DisplayName = $"{token1Emoji} {swap.Token1Symbol}";
 
             // Main swap info field
             var swapDetailsField = new StringBuilder();
 
-            // Show the swap flow with arrows
+            // Show the swap flow with arrows and proper formatting
             if (isBuy)
             {
                 swapDetailsField.AppendLine($"**{token1DisplayName} → {token0DisplayName}**");
@@ -408,47 +502,109 @@ namespace RadXPriceBot.Services
                 swapDetailsField.AppendLine($"`{token0Amount} {swap.Token0Symbol}` → `{token1Amount} {swap.Token1Symbol}`");
             }
 
-            // Add USD value if available
+            // Add USD value with special formatting
             if (swap.UsdValue > 0)
             {
-                swapDetailsField.AppendLine($"\n**Value:** {usdValue}");
+                swapDetailsField.AppendLine($"\n**Value:** {GetValueDisplay(swap.UsdValue)}");
             }
 
             // Add the swap details to the embed
-            builder.AddField("💱 Swap Details", swapDetailsField.ToString(), false);
+            builder.AddField($"{(isBuy ? "💰 Buy" : "💸 Sell")} Details", swapDetailsField.ToString(), false);
 
             // Add transaction metadata field
             var metadataField = new StringBuilder();
-            metadataField.AppendLine($"**Trader:** `{FormatAddress(swap.FromAddress)}`");
             metadataField.AppendLine($"**TX Hash:** `{FormatAddress(swap.TransactionHash)}`");
-            metadataField.AppendLine($"**Block:** `{swap.BlockNumber}`");
+            metadataField.AppendLine($"**Time:** <t:{swap.Timestamp.ToUnixTimeSeconds()}:R>");
 
             builder.AddField("📝 Transaction Data", metadataField.ToString(), false);
 
-            // Add impact/slippage data if available
+            // Add impact/slippage data if available, with more visual indicators
             if (swap.PriceImpact > 0)
             {
                 var impactField = new StringBuilder();
                 impactField.AppendLine($"**Price Impact:** {swap.PriceImpact:P2}");
 
-                string impactDescription = swap.PriceImpact switch
-                {
-                    < 0.001m => "✅ Minimal impact",
-                    < 0.005m => "✓ Low impact",
-                    < 0.01m => "⚠️ Moderate impact",
-                    < 0.03m => "🔴 High impact",
-                    _ => "⛔ Extreme impact"
-                };
+                string impactEmoji;
+                string impactDescription;
 
-                impactField.AppendLine(impactDescription);
+                if (swap.PriceImpact < 0.001m)
+                {
+                    impactEmoji = "✅";
+                    impactDescription = "Minimal impact";
+                }
+                else if (swap.PriceImpact < 0.005m)
+                {
+                    impactEmoji = "✓";
+                    impactDescription = "Low impact";
+                }
+                else if (swap.PriceImpact < 0.01m)
+                {
+                    impactEmoji = "⚠️";
+                    impactDescription = "Moderate impact";
+                }
+                else if (swap.PriceImpact < 0.03m)
+                {
+                    impactEmoji = "🔴";
+                    impactDescription = "High impact";
+                }
+                else
+                {
+                    impactEmoji = "⛔";
+                    impactDescription = "Extreme impact";
+                }
+
+                impactField.AppendLine($"{impactEmoji} **{impactDescription}**");
+
+                if (swap.PriceImpact > 0.01m)
+                {
+                    impactField.AppendLine("*Significant price movement expected*");
+                }
+
                 builder.AddField("📊 Market Impact", impactField.ToString(), false);
             }
 
-            // Add market link
+            // Add a more prominent explorer link with emoji
             builder.AddField("🔗 Links", $"[View on Explorer]({explorerUrl})", false);
 
             return builder.Build();
         }
+
+        // Helper method to categorize transaction size
+        private (string category, string emoji) CategorizeTransactionSize(decimal usdValue)
+        {
+            if (usdValue <= 0) return ("Unknown", "❓");
+
+            if (usdValue < 50)
+                return ("Plankton", "🦐");
+            if (usdValue < 200)
+                return ("Shrimp", "🦐");
+            if (usdValue < 1000)
+                return ("Fish", "🐟");
+            if (usdValue < 5000)
+                return ("Dolphin", "🐬");
+            if (usdValue < 20000)
+                return ("Shark", "🦈");
+            if (usdValue < 100000)
+                return ("Orca", "🐋");
+
+            return ("Whale", "🐳");
+        }
+
+        // Helper to format USD value with appropriate decoration
+        private string GetValueDisplay(decimal usdValue)
+        {
+            if (usdValue < 50)
+                return $"${usdValue:N2}";
+            if (usdValue < 1000)
+                return $"${usdValue:N2} 💰";
+            if (usdValue < 10000)
+                return $"${usdValue:N2} 💰💰";
+            if (usdValue < 50000)
+                return $"${usdValue:N2} 💰💰💰";
+
+            return $"${usdValue:N2} 🔥💰💰💰";
+        }
+
 
         // Helper method to format token amounts with proper decimals
         private string FormatTokenAmount(decimal amount, int decimals)
@@ -528,7 +684,6 @@ namespace RadXPriceBot.Services
         private Embed CreateDetailedPriceEmbed(Dictionary<string, decimal> metrics, TokenInfo token0, TokenInfo token1, string pairAddress)
         {
             // Store previous prices for trend detection if available
-            // Move dictionary to class level to fix CS0106 error
             if (_lastPrices == null)
                 _lastPrices = new Dictionary<string, decimal>();
 
@@ -555,7 +710,7 @@ namespace RadXPriceBot.Services
                 OnLog($"Invalid color format: {_embedColor}, using default");
             }
 
-            // Rest of code remains the same...
+            // Price trend detection
             string priceChangeEmoji = "➖";
             string priceTrendIndicator = "";
             bool isPriceIncreasing = false;
@@ -608,10 +763,13 @@ namespace RadXPriceBot.Services
             string token0Emoji = GetTokenEmoji(token0.Symbol);
             string token1Emoji = GetTokenEmoji(token1.Symbol);
 
-            // Create a more attractive title with emojis
+            // Get token thumbnail URL
+            string tokenThumbnailUrl = GetTokenThumbnailUrl(token0.Symbol);
+
+            // Create title with emojis
             string title = $"{token0Emoji} {token0.Symbol}/{token1.Symbol} Market Update {token1Emoji}";
 
-            // Build a more descriptive and dynamic description
+            // Build description
             var descBuilder = new StringBuilder();
             descBuilder.AppendLine($"**Latest data for the {token0.Symbol}/{token1.Symbol} trading pair**");
 
@@ -629,17 +787,25 @@ namespace RadXPriceBot.Services
                 .WithDescription(descBuilder.ToString())
                 .WithColor(color)
                 .WithFooter(footer => {
-                    footer
-                        .WithText($"RadX Price Bot • {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC")
-                        .WithIconUrl("https://i.imgur.com/gXdWwTR.png");
+                    footer.WithText($"RadX Price Bot • {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC");
+                    footer.WithIconUrl("https://i.imgur.com/gXdWwTR.png");
                 })
                 .WithTimestamp(DateTimeOffset.Now);
+
+            // Add the token image as thumbnail if available
+            if (_includeChartInEmbed && !string.IsNullOrEmpty(tokenThumbnailUrl))
+            {
+                builder.WithThumbnailUrl(tokenThumbnailUrl);
+            }
 
             // Add author with token logo if available
             builder.WithAuthor(author => {
                 author.Name = $"{token0.Name} ({token0.Symbol})";
-                // You could add a token logo URL here if available
-                // author.IconUrl = "https://yoursite.com/logos/token.png";
+                // Add token logo URL if available
+                if (_tokenImageUrls.TryGetValue(token0.Symbol, out string logoUrl) && !string.IsNullOrEmpty(logoUrl))
+                {
+                    author.IconUrl = logoUrl;
+                }
             });
 
             // Price Information - always included - now with trends & emojis
@@ -652,7 +818,7 @@ namespace RadXPriceBot.Services
                 string usdEmoji = "💵";
                 if (usdPrice > 100m) usdEmoji = "💰";
                 else if (usdPrice > 1000m) usdEmoji = "💎";
-                else if (usdPrice < 0.01m) usdEmoji = "🪙"; // Fix CS0019 error by using 0.01m
+                else if (usdPrice < 0.01m) usdEmoji = "🪙";
 
                 priceField.AppendLine($"{usdEmoji} **USD Price:** ${metrics["PriceUsd"]:N4}");
             }
@@ -759,17 +925,6 @@ namespace RadXPriceBot.Services
                     tradeTip = "✅ **Good liquidity depth** - Should handle normal trading volume with minimal slippage";
 
                 builder.AddField("💡 Trading Insight", tradeTip, false);
-            }
-
-            // Chart - conditionally included
-            if (_includeChartInEmbed)
-            {
-                // In a real implementation, you would generate and include a chart image
-                // builder.WithImageUrl("https://chart-url-here.com");
-
-                // For now, we'll add a placeholder thumbnail
-                string tokenIcon = "https://i.imgur.com/gXdWwTR.png"; // Replace with actual token icon URL when available
-                builder.WithThumbnailUrl(tokenIcon);
             }
 
             return builder.Build();
@@ -941,6 +1096,10 @@ namespace RadXPriceBot.Services
                 try
                 {
                     OnLog("Client ready. Registering commands...");
+
+                    // Initialize token image URLs
+                    InitializeTokenImageUrls();
+
                     var guild = _client.GetGuild(_guildId);
                     if (guild == null)
                     {
@@ -949,36 +1108,36 @@ namespace RadXPriceBot.Services
                     }
 
                     var cmds = new List<SlashCommandBuilder>
-            {
-                new SlashCommandBuilder()
-                    .WithName("price")
-                    .WithDescription("Get token price (default 1)")
-                    .AddOption(new SlashCommandOptionBuilder()
-                        .WithName("amount")
-                        .WithDescription("Input amount")
-                        .WithRequired(false)
-                        .WithType(ApplicationCommandOptionType.Number)),
+                    {
+                        new SlashCommandBuilder()
+                            .WithName("price")
+                            .WithDescription("Get token price (default 1)")
+                            .AddOption(new SlashCommandOptionBuilder()
+                                .WithName("amount")
+                                .WithDescription("Input amount")
+                                .WithRequired(false)
+                                .WithType(ApplicationCommandOptionType.Number)),
 
-                new SlashCommandBuilder()
-                    .WithName("marketcap")
-                    .WithDescription("Show token market capitalization"),
+                        new SlashCommandBuilder()
+                            .WithName("marketcap")
+                            .WithDescription("Show token market capitalization"),
 
-                new SlashCommandBuilder()
-                    .WithName("liquidity")
-                    .WithDescription("Show token pair liquidity"),
+                        new SlashCommandBuilder()
+                            .WithName("liquidity")
+                            .WithDescription("Show token pair liquidity"),
 
-                new SlashCommandBuilder()
-                    .WithName("tokeninfo")
-                    .WithDescription("Show detailed token information"),
+                        new SlashCommandBuilder()
+                            .WithName("tokeninfo")
+                            .WithDescription("Show detailed token information"),
 
-                new SlashCommandBuilder()
-                    .WithName("refresh")
-                    .WithDescription("Refresh token data and update bot status"),
+                        new SlashCommandBuilder()
+                            .WithName("refresh")
+                            .WithDescription("Refresh token data and update bot status"),
 
-                new SlashCommandBuilder()
-                    .WithName("embed")
-                    .WithDescription("Send a detailed price and information embed"),
-            };
+                        new SlashCommandBuilder()
+                            .WithName("embed")
+                            .WithDescription("Send a detailed price and information embed"),
+                    };
 
                     try
                     {
@@ -1365,11 +1524,20 @@ namespace RadXPriceBot.Services
                 var metrics = await _priceSvc.GetTokenMetricsAsync();
                 decimal usdPrice = metrics.ContainsKey("PriceUsd") ? metrics["PriceUsd"] * amt : 0;
 
+                // Get token thumbnail URL for the embed
+                string tokenThumbnailUrl = GetTokenThumbnailUrl(_token0Info?.Symbol);
+
                 var embedBuilder = new EmbedBuilder()
                     .WithTitle($"{_token0Info?.Symbol ?? "Token"} Price")
                     .WithColor(Color.Green)
                     .WithCurrentTimestamp()
                     .WithFooter("Data from Vitruveo Network");
+
+                // Add the token image as thumbnail if available
+                if (!string.IsNullOrEmpty(tokenThumbnailUrl))
+                {
+                    embedBuilder.WithThumbnailUrl(tokenThumbnailUrl);
+                }
 
                 embedBuilder.AddField($"{amt} {_token0Info?.Symbol ?? "Token"} =", $"{price:N6} {_token1Info?.Symbol ?? ""}");
 
@@ -1398,11 +1566,20 @@ namespace RadXPriceBot.Services
                 var price = metrics.ContainsKey("PriceUsd") ? metrics["PriceUsd"] : 0;
                 var liquidity = metrics.ContainsKey("Liquidity") ? metrics["Liquidity"] : 0;
 
+                // Get token thumbnail URL for the embed
+                string tokenThumbnailUrl = GetTokenThumbnailUrl(_token0Info?.Symbol);
+
                 var embedBuilder = new EmbedBuilder()
                     .WithTitle($"{_token0Info?.Symbol ?? "Token"} Market Statistics")
                     .WithColor(Color.Blue)
                     .WithCurrentTimestamp()
                     .WithFooter($"Data from Vitruveo Network • {DateTime.UtcNow:yyyy-MM-dd HH:mm} UTC");
+
+                // Add the token image as thumbnail if available
+                if (!string.IsNullOrEmpty(tokenThumbnailUrl))
+                {
+                    embedBuilder.WithThumbnailUrl(tokenThumbnailUrl);
+                }
 
                 embedBuilder
                     .AddField("Market Cap", $"${FormatLargeNumber(marketCap)}", true)
@@ -1436,6 +1613,9 @@ namespace RadXPriceBot.Services
                 var reserve0Usd = metrics.ContainsKey("Reserve0Usd") ? metrics["Reserve0Usd"] : 0;
                 var reserve1Usd = metrics.ContainsKey("Reserve1Usd") ? metrics["Reserve1Usd"] : 0;
 
+                // Get token thumbnail URL for the embed
+                string tokenThumbnailUrl = GetTokenThumbnailUrl(_token0Info?.Symbol);
+
                 var embedBuilder = new EmbedBuilder()
                     .WithTitle($"{_token0Info?.Symbol ?? "Token"}/{_token1Info?.Symbol ?? "Token"} Liquidity")
                     .WithColor(Color.Gold)
@@ -1443,6 +1623,11 @@ namespace RadXPriceBot.Services
                     .AddField("Total Liquidity", $"${FormatLargeNumber(liquidity)}")
                     .AddField($"{_token0Info?.Symbol ?? "Token0"} Reserve", $"{FormatLargeNumber(reserve0)} (${FormatLargeNumber(reserve0Usd)})")
                     .AddField($"{_token1Info?.Symbol ?? "Token1"} Reserve", $"{FormatLargeNumber(reserve1)} (${FormatLargeNumber(reserve1Usd)})");
+                // Add the token image as thumbnail if available
+                if (!string.IsNullOrEmpty(tokenThumbnailUrl))
+                {
+                    embedBuilder.WithThumbnailUrl(tokenThumbnailUrl);
+                }
 
                 // Add pair address
                 if (!string.IsNullOrEmpty(_token0Info?.Address) && !string.IsNullOrEmpty(_token1Info?.Address))
@@ -1467,10 +1652,19 @@ namespace RadXPriceBot.Services
             {
                 var metrics = await _priceSvc.GetTokenMetricsAsync();
 
+                // Get token thumbnail URL for the embed
+                string tokenThumbnailUrl = GetTokenThumbnailUrl(_token0Info?.Symbol);
+
                 var embedBuilder = new EmbedBuilder()
                     .WithTitle($"{_token0Info?.Name ?? "Token"} Information")
                     .WithColor(Color.Purple)
                     .WithCurrentTimestamp();
+
+                // Add the token image as thumbnail if available
+                if (!string.IsNullOrEmpty(tokenThumbnailUrl))
+                {
+                    embedBuilder.WithThumbnailUrl(tokenThumbnailUrl);
+                }
 
                 // Basic token info
                 embedBuilder
