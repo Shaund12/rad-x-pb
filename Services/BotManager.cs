@@ -1,4 +1,5 @@
 // Services/BotManager.cs
+using Nethereum.JsonRpc.Client;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -298,14 +299,22 @@ namespace RadXPriceBot.Services
         }
 
         // Legacy method
+        // Legacy method
         public async Task StopAsync()
         {
+            // Find the first bot instance
             var defaultBotId = _botInstances.Keys.FirstOrDefault();
-            if (!string.IsNullOrEmpty(defaultBotId))
+            if (string.IsNullOrEmpty(defaultBotId))
             {
-                await StopBotAsync(defaultBotId);
+                _logAction("No active bots found, cannot stop");
+                return;
             }
+
+            // Use the existing StopBotAsync method to properly stop the bot instance
+            await StopBotAsync(defaultBotId);
         }
+
+
 
         #endregion
     }

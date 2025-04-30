@@ -1,10 +1,14 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Numerics;
+using System.Linq;
 using System.Threading.Tasks;
 using Nethereum.Contracts;
+using Nethereum.RPC.Eth.DTOs;
 using Nethereum.Util;
 using Nethereum.Web3;
+using Nethereum.Hex.HexTypes;
+using Nethereum.ABI.FunctionEncoding.Attributes;
 
 namespace RadXPriceBot.Services
 {
@@ -16,6 +20,43 @@ namespace RadXPriceBot.Services
         public int Decimals { get; set; }
         public decimal TotalSupply { get; set; }
         public decimal UsdPrice { get; set; } // Add USD price information
+    }
+
+    public class SwapTransaction
+    {
+        public string TransactionHash { get; set; }
+        public string FromAddress { get; set; }
+        public string ToAddress { get; set; }
+        public long BlockNumber { get; set; }
+        public DateTimeOffset Timestamp { get; set; }
+
+        // Token information
+        public string Token0Address { get; set; }
+        public string Token1Address { get; set; }
+        public string Token0Symbol { get; set; }
+        public string Token1Symbol { get; set; }
+        public int Token0Decimals { get; set; } = 18;
+        public int Token1Decimals { get; set; } = 18;
+
+        // Transaction amounts
+        public decimal TokenAmount { get; set; }
+        public decimal ValueAmount { get; set; }
+        public decimal UsdValue { get; set; }
+
+        // Swap metrics
+        public decimal PriceImpact { get; set; }
+        public bool IsBuyTransaction { get; set; }
+    }
+
+    [Event("Swap")]
+    public class SwapEventDTO : IEventDTO
+    {
+        [Parameter("address", "sender", 1, true)] public string Sender { get; set; }
+        [Parameter("uint256", "amount0In", 2, false)] public BigInteger Amount0In { get; set; }
+        [Parameter("uint256", "amount1In", 3, false)] public BigInteger Amount1In { get; set; }
+        [Parameter("uint256", "amount0Out", 4, false)] public BigInteger Amount0Out { get; set; }
+        [Parameter("uint256", "amount1Out", 5, false)] public BigInteger Amount1Out { get; set; }
+        [Parameter("address", "to", 6, true)] public string To { get; set; }
     }
 
     public class PriceService
@@ -246,6 +287,116 @@ namespace RadXPriceBot.Services
 
             return result;
         }
+
+
+        // Add this method to PriceService.cs
+        public async Task<List<SwapTransaction>> GetRecentSwapsAsync(int count = 10)
+        {
+            try
+            {
+                _logger?.Invoke($"Fetching recent swaps (max: {count})...");
+
+                // 1. Get the pair address and token info
+                var (pairAddress, token0, token1) = await GetPairDetailsAsync();
+
+                // 2. Create a typed handler for the Swap event
+                var eventHandler = _web3.Eth.GetEvent<SwapEventDTO>(pairAddress);
+
+                // 3. Figure out our block range (last ~1000 blocks)
+                var latestBlockNumber = await _web3.Eth.Blocks.GetBlockNumber.SendRequestAsync();
+                var fromBlockNumber = latestBlockNumber.Value - 1000;
+                if (fromBlockNumber < 0) fromBlockNumber = 0;
+
+                // 4. Build the filter input in one shot
+                var filter = eventHandler.CreateFilterInput(
+                    new BlockParameter(new HexBigInteger(fromBlockNumber)),
+                    BlockParameter.CreateLatest()
+                );
+
+                // 5. Fetch all matching logs
+                var logs = await eventHandler.GetAllChangesAsync(filter);
+
+                var transactions = new List<SwapTransaction>();
+
+                // 6. Process up to [count] events
+                foreach (var eventLog in logs.Take(count))
+                {
+                    var data = eventLog.Event;
+                    var sender = data.Sender;
+                    var to = data.To;
+                    var amount0In = Web3.Convert.FromWei(data.Amount0In, token0.Decimals);
+                    var amount1In = Web3.Convert.FromWei(data.Amount1In, token1.Decimals);
+                    var amount0Out = Web3.Convert.FromWei(data.Amount0Out, token0.Decimals);
+                    var amount1Out = Web3.Convert.FromWei(data.Amount1Out, token1.Decimals);
+
+                    // Determine buy vs sell
+                    var isBuy = amount1In > 0 && amount0Out > 0;
+
+                    // Compute USD value
+                    decimal usdValue = 0;
+                    if (isBuy)
+                    {
+                        if (token1.Symbol is "USDC.POL" or "USDC" or "USDT")
+                            usdValue = amount1In;
+                        else
+                        {
+                            var price1 = await GetTokenUsdPriceAsync(token1.Address);
+                            usdValue = amount1In * price1;
+                        }
+                    }
+                    else
+                    {
+                        var price0 = await GetTokenUsdPriceAsync(token0.Address);
+                        usdValue = amount0In * price0;
+                    }
+
+                    // Approximate price impact
+                    var (reserve0, reserve1) = await GetReservesAsync();
+                    decimal priceImpact = 0;
+                    if (isBuy && reserve1 > 0) priceImpact = amount1In / reserve1;
+                    else if (!isBuy && reserve0 > 0) priceImpact = amount0In / reserve0;
+
+                    // Get timestamp from block
+                    var receipt = await _web3.Eth.Transactions
+                        .GetTransactionReceipt.SendRequestAsync(eventLog.Log.TransactionHash);
+                    var block = await _web3.Eth.Blocks
+                        .GetBlockWithTransactionsByNumber
+                        .SendRequestAsync(new BlockParameter(receipt.BlockNumber));
+
+                    transactions.Add(new SwapTransaction
+                    {
+                        TransactionHash = eventLog.Log.TransactionHash,
+                        FromAddress = sender,
+                        ToAddress = to,
+                        BlockNumber = (long)eventLog.Log.BlockNumber.Value,
+                        Timestamp = DateTimeOffset
+                                             .FromUnixTimeSeconds((long)block.Timestamp.Value),
+                        Token0Address = token0.Address,
+                        Token1Address = token1.Address,
+                        Token0Symbol = token0.Symbol,
+                        Token1Symbol = token1.Symbol,
+                        Token0Decimals = token0.Decimals,
+                        Token1Decimals = token1.Decimals,
+                        IsBuyTransaction = isBuy,
+                        TokenAmount = isBuy ? amount0Out : amount0In,
+                        ValueAmount = isBuy ? amount1In : amount1Out,
+                        UsdValue = usdValue,
+                        PriceImpact = priceImpact
+                    });
+                }
+
+                // 7. Return newest first
+                return transactions
+                       .OrderByDescending(t => t.BlockNumber)
+                       .ToList();
+            }
+            catch (Exception ex)
+            {
+                _logger?.Invoke($"Error fetching recent swaps: {ex.Message}");
+                return new List<SwapTransaction>();
+            }
+        }
+
 
         private async Task<decimal?> GetTokenPairPriceAsync(string tokenA, string tokenB)
         {

@@ -1666,37 +1666,47 @@
                                         </Grid.ColumnDefinitions>
 
                                         <TextBlock Grid.Column="0" Text="EXECUTION LOGS" 
-                                       Style="{StaticResource SectionHeaderStyle}"
-                                       VerticalAlignment="Center"/>
+                       Style="{StaticResource SectionHeaderStyle}"
+                       VerticalAlignment="Center"/>
 
                                         <Border Grid.Column="1" 
-                                    Background="#30FFFFFF" 
-                                    Height="1" 
-                                    Margin="12,0,0,0"
-                                    VerticalAlignment="Center"/>
+                    Background="#30FFFFFF" 
+                    Height="1" 
+                    Margin="12,0,0,0"
+                    VerticalAlignment="Center"/>
                                     </Grid>
 
                                     <Grid>
-                                        <TextBox x:Name="MultiLogTextBox"
-                                     Style="{StaticResource LogConsoleStyle}"
-                                     MinHeight="240"/>
+                                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" MaxHeight="240">
+                                            <TextBox x:Name="MultiLogTextBox"
+                         Style="{StaticResource LogConsoleStyle}"
+                         Height="Auto"
+                         AcceptsReturn="True"
+                         TextWrapping="Wrap"
+                         IsReadOnly="True"
+                         BorderThickness="0"
+                         Background="Transparent"
+                         VerticalScrollBarVisibility="Hidden"
+                         HorizontalScrollBarVisibility="Hidden"/>
+                                        </ScrollViewer>
 
                                         <!-- Timestamp indicator in the corner of the log console -->
                                         <Border Background="#20000000" 
-                                    HorizontalAlignment="Right" 
-                                    VerticalAlignment="Top"
-                                    Padding="8,3"
-                                    CornerRadius="0,0,0,5"
-                                    BorderThickness="0,0,0,1"
-                                    BorderBrush="#404452">
+                    HorizontalAlignment="Right" 
+                    VerticalAlignment="Top"
+                    Padding="8,3"
+                    CornerRadius="0,0,0,5"
+                    BorderThickness="0,0,0,1"
+                    BorderBrush="#404452">
                                             <TextBlock Text="Live Updates" 
-                                           Foreground="{StaticResource PrimaryBrush}" 
-                                           FontSize="11"
-                                           FontStyle="Italic"/>
+                           Foreground="{StaticResource PrimaryBrush}" 
+                           FontSize="11"
+                           FontStyle="Italic"/>
                                         </Border>
                                     </Grid>
                                 </DockPanel>
                             </Border>
+
 
                             <!-- Bot Controls Panel -->
                             <Border Grid.Row="2" Style="{StaticResource CardPanelStyle}" Margin="0,0,0,0">

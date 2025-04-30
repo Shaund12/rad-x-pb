@@ -45,6 +45,19 @@ namespace RadXPriceBot.Services
         private bool _includeTokenInfoInEmbed = true;
         private bool _includeLiquidityInfoInEmbed = true;
 
+        private ulong _swapNotificationChannelId;
+        private bool _monitorBuyTransactions = false;
+        private System.Timers.Timer _transactionMonitorTimer;
+        // Fix 1: Change the readonly field to a regular field
+        // Remove 'readonly' from the declaration
+        private int _transactionCheckIntervalMs = 15000; // Default to check every 15 seconds
+
+        private List<string> _lastProcessedTransactions = new List<string>();
+        private const int MAX_STORED_TX_HASHES = 100; // Store only last 100 processed transactions
+
+
+        private Dictionary<string, decimal> _lastPrices;
+
         public event Action<string> OnLog = delegate { };
         public event EventHandler<BotStatusUpdateEventArgs> StatusUpdated;
 
@@ -123,6 +136,7 @@ namespace RadXPriceBot.Services
         {
             StatusUpdated?.Invoke(this, new BotStatusUpdateEventArgs { Metrics = metrics, PairInfo = pairInfo });
         }
+
 
         private void SetupUpdateTimer()
         {
@@ -241,6 +255,229 @@ namespace RadXPriceBot.Services
             _embedChannelId = 0;
         }
 
+        public void EnableSwapMonitoring(ulong channelId, int checkIntervalMs = 15000)
+        {
+            _swapNotificationChannelId = channelId;
+            _monitorBuyTransactions = true;
+            _transactionCheckIntervalMs = checkIntervalMs;
+
+            // Clean up existing timer if any
+            _transactionMonitorTimer?.Stop();
+            _transactionMonitorTimer?.Dispose();
+
+            // Setup monitoring timer
+            _transactionMonitorTimer = new System.Timers.Timer(_transactionCheckIntervalMs);
+            _transactionMonitorTimer.Elapsed += async (s, e) =>
+            {
+                try
+                {
+                    await CheckForNewTransactionsAsync();
+                }
+                catch (Exception ex)
+                {
+                    OnLog($"Error monitoring transactions: {ex.Message}");
+                }
+            };
+            _transactionMonitorTimer.AutoReset = true;
+            _transactionMonitorTimer.Start();
+
+            OnLog($"Swap monitoring enabled. Channel: {channelId}, Interval: {checkIntervalMs}ms");
+        }
+
+        public void DisableSwapMonitoring()
+        {
+            _monitorBuyTransactions = false;
+            _transactionMonitorTimer?.Stop();
+            _transactionMonitorTimer?.Dispose();
+            _transactionMonitorTimer = null;
+            OnLog("Swap monitoring disabled");
+        }
+
+        private async Task CheckForNewTransactionsAsync()
+        {
+            if (!_monitorBuyTransactions || _swapNotificationChannelId == 0 || _client == null || _client.ConnectionState != ConnectionState.Connected)
+            {
+                return;
+            }
+
+            try
+            {
+                // Get recent transactions from PriceService
+                var recentSwaps = await _priceSvc.GetRecentSwapsAsync(10);
+                if (recentSwaps == null || !recentSwaps.Any())
+                {
+                    return;
+                }
+
+                // Process each transaction
+                foreach (var swap in recentSwaps.Where(s => !_lastProcessedTransactions.Contains(s.TransactionHash)))
+                {
+                    // Add to processed list to avoid duplicates
+                    _lastProcessedTransactions.Add(swap.TransactionHash);
+
+                    // Trim list to avoid memory issues
+                    if (_lastProcessedTransactions.Count > MAX_STORED_TX_HASHES)
+                    {
+                        _lastProcessedTransactions.RemoveAt(0);
+                    }
+
+                    // Only process buy transactions (token0 → token1)
+                    // In AMM context, token0 is usually the project token, token1 is the base pair (USDC, ETH, etc)
+                    // Fix 2: Change Amount to TokenAmount which is the property available in SwapTransaction
+                    if (swap.IsBuyTransaction && swap.TokenAmount > 0)
+
+                    {
+                        await SendSwapNotificationAsync(swap);
+                        OnLog($"Sent swap notification for TX: {swap.TransactionHash}");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                OnLog($"Error checking for transactions: {ex.Message}");
+            }
+        }
+
+        private async Task SendSwapNotificationAsync(SwapTransaction swap)
+        {
+            var channel = await _client.GetChannelAsync(_swapNotificationChannelId) as IMessageChannel;
+            if (channel == null)
+            {
+                OnLog($"Could not find swap notification channel {_swapNotificationChannelId}");
+                return;
+            }
+
+            // Create a detailed swap embed
+            var embed = CreateSwapEmbed(swap);
+
+            // Send to Discord channel
+            await channel.SendMessageAsync(embed: embed);
+        }
+
+        private Embed CreateSwapEmbed(SwapTransaction swap)
+        {
+            // Determine if it's a buy or sell
+            bool isBuy = swap.IsBuyTransaction;
+            Color color = isBuy ? new Color(46, 204, 113) : new Color(231, 76, 60); // Green for buy, red for sell
+
+            // Format amounts with the proper number of decimals
+            string token0Amount = FormatTokenAmount(swap.TokenAmount, swap.Token0Decimals);
+            string token1Amount = FormatTokenAmount(swap.ValueAmount, swap.Token1Decimals);
+
+            // Calculate USD value if available
+            string usdValue = swap.UsdValue > 0 ? $"${swap.UsdValue:N2}" : "Unknown";
+
+            // Get token emojis
+            string token0Emoji = GetTokenEmoji(swap.Token0Symbol);
+            string token1Emoji = GetTokenEmoji(swap.Token1Symbol);
+
+            // Title based on swap type
+            string title = isBuy
+                ? $"{token0Emoji} New Buy Transaction {token0Emoji}"
+                : $"{token1Emoji} New Sell Transaction {token1Emoji}";
+
+            // Get block explorer URL
+            string explorerUrl = $"https://explorer.vitruveo.xyz/tx/{swap.TransactionHash}";
+
+            // Create the embed
+            var builder = new EmbedBuilder()
+                .WithTitle(title)
+                .WithColor(color)
+                .WithTimestamp(swap.Timestamp)
+                .WithFooter(footer => {
+                    footer.WithText($"RadX Price Bot • Block #{swap.BlockNumber}");
+                    footer.WithIconUrl("https://i.imgur.com/gXdWwTR.png");
+                });
+
+            // Symbol formatting
+            string token0DisplayName = $"{token0Emoji} {swap.Token0Symbol}";
+            string token1DisplayName = $"{token1Emoji} {swap.Token1Symbol}";
+
+            // Main swap info field
+            var swapDetailsField = new StringBuilder();
+
+            // Show the swap flow with arrows
+            if (isBuy)
+            {
+                swapDetailsField.AppendLine($"**{token1DisplayName} → {token0DisplayName}**");
+                swapDetailsField.AppendLine($"`{token1Amount} {swap.Token1Symbol}` → `{token0Amount} {swap.Token0Symbol}`");
+            }
+            else
+            {
+                swapDetailsField.AppendLine($"**{token0DisplayName} → {token1DisplayName}**");
+                swapDetailsField.AppendLine($"`{token0Amount} {swap.Token0Symbol}` → `{token1Amount} {swap.Token1Symbol}`");
+            }
+
+            // Add USD value if available
+            if (swap.UsdValue > 0)
+            {
+                swapDetailsField.AppendLine($"\n**Value:** {usdValue}");
+            }
+
+            // Add the swap details to the embed
+            builder.AddField("💱 Swap Details", swapDetailsField.ToString(), false);
+
+            // Add transaction metadata field
+            var metadataField = new StringBuilder();
+            metadataField.AppendLine($"**Trader:** `{FormatAddress(swap.FromAddress)}`");
+            metadataField.AppendLine($"**TX Hash:** `{FormatAddress(swap.TransactionHash)}`");
+            metadataField.AppendLine($"**Block:** `{swap.BlockNumber}`");
+
+            builder.AddField("📝 Transaction Data", metadataField.ToString(), false);
+
+            // Add impact/slippage data if available
+            if (swap.PriceImpact > 0)
+            {
+                var impactField = new StringBuilder();
+                impactField.AppendLine($"**Price Impact:** {swap.PriceImpact:P2}");
+
+                string impactDescription = swap.PriceImpact switch
+                {
+                    < 0.001m => "✅ Minimal impact",
+                    < 0.005m => "✓ Low impact",
+                    < 0.01m => "⚠️ Moderate impact",
+                    < 0.03m => "🔴 High impact",
+                    _ => "⛔ Extreme impact"
+                };
+
+                impactField.AppendLine(impactDescription);
+                builder.AddField("📊 Market Impact", impactField.ToString(), false);
+            }
+
+            // Add market link
+            builder.AddField("🔗 Links", $"[View on Explorer]({explorerUrl})", false);
+
+            return builder.Build();
+        }
+
+        // Helper method to format token amounts with proper decimals
+        private string FormatTokenAmount(decimal amount, int decimals)
+        {
+            if (amount == 0) return "0";
+
+            if (decimals <= 0) decimals = 18; // Default to 18 if not specified
+
+            // For very small values
+            if (amount < (decimal)Math.Pow(10, -5))
+
+            {
+                return amount.ToString("E4"); // Scientific notation
+            }
+
+            // For normal values
+            string format = "0.";
+            format = format.PadRight(format.Length + Math.Min(decimals, 8), '#'); // Show up to 8 decimals
+            return amount.ToString(format);
+        }
+
+        // Helper method to shorten addresses for display
+        private string FormatAddress(string address)
+        {
+            if (string.IsNullOrEmpty(address) || address.Length < 10)
+                return address ?? "Unknown";
+
+            return $"{address.Substring(0, 6)}...{address.Substring(address.Length - 4)}";
+        }
         private async Task SendPeriodicEmbed()
         {
             try
@@ -290,6 +527,13 @@ namespace RadXPriceBot.Services
 
         private Embed CreateDetailedPriceEmbed(Dictionary<string, decimal> metrics, TokenInfo token0, TokenInfo token1, string pairAddress)
         {
+            // Store previous prices for trend detection if available
+            // Move dictionary to class level to fix CS0106 error
+            if (_lastPrices == null)
+                _lastPrices = new Dictionary<string, decimal>();
+
+            string pairKey = $"{token0.Symbol}/{token1.Symbol}";
+
             // Parse the custom color or use default green if invalid
             var color = new Color(75, 233, 153); // Default green
             try
@@ -311,9 +555,78 @@ namespace RadXPriceBot.Services
                 OnLog($"Invalid color format: {_embedColor}, using default");
             }
 
+            // Rest of code remains the same...
+            string priceChangeEmoji = "➖";
+            string priceTrendIndicator = "";
+            bool isPriceIncreasing = false;
+
+            if (metrics.ContainsKey("Price"))
+            {
+                decimal currentPrice = metrics["Price"];
+                if (_lastPrices.ContainsKey(pairKey))
+                {
+                    decimal lastPrice = _lastPrices[pairKey];
+                    decimal change = currentPrice - lastPrice;
+                    decimal percentChange = lastPrice != 0 ? (change / lastPrice) * 100 : 0;
+
+                    if (percentChange > 0.5m)
+                    {
+                        priceChangeEmoji = "🟢";
+                        isPriceIncreasing = true;
+
+                        // Add trend indicators based on magnitude
+                        if (percentChange > 10)
+                            priceTrendIndicator = " 🚀 **PUMPING!**";
+                        else if (percentChange > 5)
+                            priceTrendIndicator = " 📈 **Rising Fast**";
+                        else if (percentChange > 1)
+                            priceTrendIndicator = " ↗️ Rising";
+
+                        color = new Color(46, 204, 113); // Green for price increase
+                    }
+                    else if (percentChange < -0.5m)
+                    {
+                        priceChangeEmoji = "🔴";
+
+                        // Add trend indicators based on magnitude
+                        if (percentChange < -10)
+                            priceTrendIndicator = " 📉 **DUMPING!**";
+                        else if (percentChange < -5)
+                            priceTrendIndicator = " ↘️ **Falling Fast**";
+                        else if (percentChange < -1)
+                            priceTrendIndicator = " ↘️ Falling";
+
+                        color = new Color(231, 76, 60); // Red for price decrease
+                    }
+                }
+
+                // Store current price for next comparison
+                _lastPrices[pairKey] = currentPrice;
+            }
+
+            // Get token-specific emojis
+            string token0Emoji = GetTokenEmoji(token0.Symbol);
+            string token1Emoji = GetTokenEmoji(token1.Symbol);
+
+            // Create a more attractive title with emojis
+            string title = $"{token0Emoji} {token0.Symbol}/{token1.Symbol} Market Update {token1Emoji}";
+
+            // Build a more descriptive and dynamic description
+            var descBuilder = new StringBuilder();
+            descBuilder.AppendLine($"**Latest data for the {token0.Symbol}/{token1.Symbol} trading pair**");
+
+            // Add market sentiment if we have a trend
+            if (!string.IsNullOrEmpty(priceTrendIndicator))
+            {
+                descBuilder.AppendLine($"\n**Market Sentiment:** {priceChangeEmoji} {(isPriceIncreasing ? "Bullish" : "Bearish")}{priceTrendIndicator}");
+            }
+
+            // Add timestamp information to description
+            descBuilder.AppendLine($"\n*Last Updated: {DateTime.UtcNow:HH:mm:ss} UTC*");
+
             var builder = new EmbedBuilder()
-                .WithTitle($"{token0.Symbol}/{token1.Symbol} Market Update")
-                .WithDescription($"Current data for the {token0.Symbol}/{token1.Symbol} trading pair")
+                .WithTitle(title)
+                .WithDescription(descBuilder.ToString())
                 .WithColor(color)
                 .WithFooter(footer => {
                     footer
@@ -322,68 +635,217 @@ namespace RadXPriceBot.Services
                 })
                 .WithTimestamp(DateTimeOffset.Now);
 
-            // Price Information - always included
+            // Add author with token logo if available
+            builder.WithAuthor(author => {
+                author.Name = $"{token0.Name} ({token0.Symbol})";
+                // You could add a token logo URL here if available
+                // author.IconUrl = "https://yoursite.com/logos/token.png";
+            });
+
+            // Price Information - always included - now with trends & emojis
             var priceField = new StringBuilder();
-            priceField.AppendLine($"**Current Price:** {metrics["Price"]:N6} {token1.Symbol}");
+            priceField.AppendLine($"{priceChangeEmoji} **Current Price:** {metrics["Price"]:N6} {token1.Symbol}");
 
             if (metrics.ContainsKey("PriceUsd") && metrics["PriceUsd"] > 0)
-                priceField.AppendLine($"**USD Price:** ${metrics["PriceUsd"]:N4}");
+            {
+                decimal usdPrice = metrics["PriceUsd"];
+                string usdEmoji = "💵";
+                if (usdPrice > 100m) usdEmoji = "💰";
+                else if (usdPrice > 1000m) usdEmoji = "💎";
+                else if (usdPrice < 0.01m) usdEmoji = "🪙"; // Fix CS0019 error by using 0.01m
+
+                priceField.AppendLine($"{usdEmoji} **USD Price:** ${metrics["PriceUsd"]:N4}");
+            }
 
             decimal reversePrice = metrics["Price"] > 0 ? 1 / metrics["Price"] : 0;
             if (reversePrice > 0)
-                priceField.AppendLine($"**Reverse Rate:** {reversePrice:N6} {token0.Symbol}");
+                priceField.AppendLine($"🔄 **Reverse Rate:** {reversePrice:N6} {token0.Symbol}/{token1.Symbol}");
 
-            builder.AddField("💰 Price Information", priceField.ToString(), true);
+            builder.AddField($"{GetPriceFieldEmoji(metrics["Price"])} Price Information", priceField.ToString(), true);
 
             // Liquidity Information - conditionally included
             if (_includeLiquidityInfoInEmbed)
             {
                 var liquidityField = new StringBuilder();
-                liquidityField.AppendLine($"**Total Liquidity:** ${FormatLargeNumber(metrics["Liquidity"])}");
+
+                decimal liquidity = metrics.ContainsKey("Liquidity") ? metrics["Liquidity"] : 0;
+                string liquidityEmoji = GetLiquidityEmoji(liquidity);
+
+                liquidityField.AppendLine($"{liquidityEmoji} **Total Liquidity:** ${FormatLargeNumberWithEmoji(liquidity)}");
 
                 // Volume information if available
-                if (metrics.ContainsKey("Volume24h"))
-                    liquidityField.AppendLine($"**24h Volume:** ${FormatLargeNumber(metrics["Volume24h"])}");
+                if (metrics.ContainsKey("Volume24h") && metrics["Volume24h"] > 0)
+                {
+                    decimal volume = metrics["Volume24h"];
+                    string volumeEmoji = GetVolumeEmoji(volume, liquidity);
+                    liquidityField.AppendLine($"{volumeEmoji} **24h Volume:** ${FormatLargeNumberWithEmoji(volume)}");
+                }
 
-                liquidityField.AppendLine($"**{token0.Symbol} Reserve:** {FormatLargeNumber(metrics["Reserve0"])}");
-                liquidityField.AppendLine($"**{token1.Symbol} Reserve:** {FormatLargeNumber(metrics["Reserve1"])}");
+                liquidityField.AppendLine($"{token0Emoji} **{token0.Symbol} Reserve:** {FormatLargeNumberWithEmoji(metrics["Reserve0"])}");
+                liquidityField.AppendLine($"{token1Emoji} **{token1.Symbol} Reserve:** {FormatLargeNumberWithEmoji(metrics["Reserve1"])}");
 
-                builder.AddField("💧 Liquidity Information", liquidityField.ToString(), true);
+                builder.AddField($"💧 Liquidity Information", liquidityField.ToString(), true);
             }
 
             // Token Information - conditionally included
             if (_includeTokenInfoInEmbed)
             {
                 var tokenInfoField = new StringBuilder();
-                tokenInfoField.AppendLine($"**Market Cap:** ${FormatLargeNumber(metrics["MarketCap"])}");
+
+                decimal marketCap = metrics.ContainsKey("MarketCap") ? metrics["MarketCap"] : 0;
+                string mcapEmoji = GetMarketCapEmoji(marketCap);
+
+                tokenInfoField.AppendLine($"{mcapEmoji} **Market Cap:** ${FormatLargeNumberWithEmoji(marketCap)}");
 
                 if (metrics.ContainsKey("TotalSupply") && metrics["TotalSupply"] > 0)
-                    tokenInfoField.AppendLine($"**Total Supply:** {FormatLargeNumber(metrics["TotalSupply"])} {token0.Symbol}");
+                {
+                    decimal totalSupply = metrics["TotalSupply"];
+                    tokenInfoField.AppendLine($"📊 **Total Supply:** {FormatLargeNumberWithEmoji(totalSupply)} {token0.Symbol}");
+                }
 
                 if (metrics.ContainsKey("CirculatingSupply") && metrics["CirculatingSupply"] > 0)
-                    tokenInfoField.AppendLine($"**Circulating Supply:** {FormatLargeNumber(metrics["CirculatingSupply"])} {token0.Symbol}");
+                {
+                    decimal circSupply = metrics["CirculatingSupply"];
+                    decimal totalSupply = metrics.ContainsKey("TotalSupply") ? metrics["TotalSupply"] : 0;
 
-                builder.AddField("📊 Token Information", tokenInfoField.ToString(), false);
+                    // Calculate the percentage of circulating supply if total supply is available
+                    if (totalSupply > 0)
+                    {
+                        decimal circulationPercent = (circSupply / totalSupply) * 100;
+                        tokenInfoField.AppendLine($"🔄 **Circulating Supply:** {FormatLargeNumberWithEmoji(circSupply)} {token0.Symbol} ({circulationPercent:N2}%)");
+                    }
+                    else
+                    {
+                        tokenInfoField.AppendLine($"🔄 **Circulating Supply:** {FormatLargeNumberWithEmoji(circSupply)} {token0.Symbol}");
+                    }
+                }
+
+                // Add holder count if available
+                if (metrics.ContainsKey("HolderCount") && metrics["HolderCount"] > 0)
+                {
+                    decimal holders = metrics["HolderCount"];
+                    string holderEmoji = holders > 1000 ? "👥" : "👤";
+                    tokenInfoField.AppendLine($"{holderEmoji} **Holders:** {FormatLargeNumberWithEmoji(holders)}");
+                }
+
+                builder.AddField($"📈 Token Information", tokenInfoField.ToString(), false);
             }
 
             // Contract Information - always included
             var addressField = new StringBuilder();
-            addressField.AppendLine($"**Pair Address:** `{pairAddress}`");
-            addressField.AppendLine($"**{token0.Symbol} Address:** `{token0.Address}`");
-            addressField.AppendLine($"**{token1.Symbol} Address:** `{token1.Address}`");
+            addressField.AppendLine($"🔗 **Pair Address:** `{pairAddress}`");
+            addressField.AppendLine($"{token0Emoji} **{token0.Symbol} Address:** `{token0.Address}`");
+            addressField.AppendLine($"{token1Emoji} **{token1.Symbol} Address:** `{token1.Address}`");
 
-            builder.AddField("🔗 Contract Information", addressField.ToString(), false);
+            // Add block explorer links if available
+            addressField.AppendLine($"\n🔍 **View on Explorer:** [Pair](https://explorer.vitruveo.xyz/address/{pairAddress}) | " +
+                                   $"[{token0.Symbol}](https://explorer.vitruveo.xyz/address/{token0.Address}) | " +
+                                   $"[{token1.Symbol}](https://explorer.vitruveo.xyz/address/{token1.Address})");
+
+            builder.AddField($"📝 Contract Information", addressField.ToString(), false);
+
+            // Add trading tips based on metrics
+            if (metrics.ContainsKey("Volume24h") && metrics.ContainsKey("Liquidity") &&
+                metrics["Volume24h"] > 0 && metrics["Liquidity"] > 0)
+            {
+                decimal volumeToLiquidityRatio = metrics["Volume24h"] / metrics["Liquidity"];
+                string tradeTip;
+
+                if (volumeToLiquidityRatio > 0.5m)
+                    tradeTip = "⚠️ **High volume/liquidity ratio** - Trading may cause significant slippage";
+                else if (volumeToLiquidityRatio > 0.2m)
+                    tradeTip = "⚠️ **Moderate volume/liquidity ratio** - Watch for slippage on larger trades";
+                else
+                    tradeTip = "✅ **Good liquidity depth** - Should handle normal trading volume with minimal slippage";
+
+                builder.AddField("💡 Trading Insight", tradeTip, false);
+            }
 
             // Chart - conditionally included
             if (_includeChartInEmbed)
             {
                 // In a real implementation, you would generate and include a chart image
-                // For now, we'll just include a placeholder URL or comment about it
                 // builder.WithImageUrl("https://chart-url-here.com");
+
+                // For now, we'll add a placeholder thumbnail
+                string tokenIcon = "https://i.imgur.com/gXdWwTR.png"; // Replace with actual token icon URL when available
+                builder.WithThumbnailUrl(tokenIcon);
             }
 
             return builder.Build();
         }
+
+        // Helper methods for the enhanced embed
+
+        private string GetTokenEmoji(string symbol)
+        {
+            return symbol?.ToUpper() switch
+            {
+                "WVTRU" => "⚡",
+                "VTRO" => "🔷",
+                "USDC.POL" => "💵",
+                "USDC" => "💵",
+                "USDT" => "💲",
+                "WETH" => "🔹",
+                "BTC" => "₿",
+                "WBTC" => "₿",
+                _ => "🪙" // Default token emoji
+            };
+        }
+
+        private string GetPriceFieldEmoji(decimal price)
+        {
+            if (price < 0.00001m) return "🔬"; // Microscopic price
+            if (price < 0.01m) return "💰";    // Small price
+            if (price > 1000m) return "💎";    // Large price
+            return "💲";                        // Default price emoji
+        }
+
+        private string GetLiquidityEmoji(decimal liquidity)
+        {
+            if (liquidity < 10000) return "💧"; // Very low liquidity
+            if (liquidity < 100000) return "💦"; // Low liquidity
+            if (liquidity < 1000000) return "🌊"; // Medium liquidity
+            return "🌋";                         // High liquidity
+        }
+
+        private string GetVolumeEmoji(decimal volume, decimal liquidity)
+        {
+            if (liquidity == 0) return "📊"; // Default
+
+            decimal volumeRatio = volume / liquidity;
+
+            if (volumeRatio > 0.5m) return "🔥"; // High volume relative to liquidity
+            if (volumeRatio > 0.2m) return "📈"; // Good volume
+            if (volumeRatio > 0.05m) return "📊"; // Moderate volume
+            return "📉";                         // Low volume
+        }
+
+        private string GetMarketCapEmoji(decimal marketCap)
+        {
+            if (marketCap > 1000000000) return "🏆"; // >1B market cap
+            if (marketCap > 100000000) return "💰"; // >100M market cap
+            if (marketCap > 10000000) return "💵"; // >10M market cap
+            return "🪙";                          // Small market cap
+        }
+
+        private string FormatLargeNumberWithEmoji(decimal number)
+        {
+            string formatted = FormatLargeNumber(number);
+
+            // Add emoji based on number magnitude
+            if (formatted.EndsWith("T"))
+                return $"{formatted} 🏆"; // Trillion
+            if (formatted.EndsWith("B"))
+                return $"{formatted} 💰"; // Billion
+            if (formatted.EndsWith("M"))
+                return $"{formatted} 💵"; // Million
+            if (formatted.EndsWith("K"))
+                return $"{formatted} 💴"; // Thousand
+
+            return formatted;
+        }
+
 
         public async Task StopAsync()
         {
@@ -471,17 +933,22 @@ namespace RadXPriceBot.Services
             return Task.CompletedTask;
         }
 
-        private async Task ReadyAsync()
+        private Task ReadyAsync()
         {
-            OnLog("Client ready. Registering commands...");
-            var guild = _client.GetGuild(_guildId);
-            if (guild == null)
+            // Don't block the gateway task - handle everything asynchronously
+            _ = Task.Run(async () =>
             {
-                OnLog($"ERROR: Guild {_guildId} not found!");
-                return;
-            }
+                try
+                {
+                    OnLog("Client ready. Registering commands...");
+                    var guild = _client.GetGuild(_guildId);
+                    if (guild == null)
+                    {
+                        OnLog($"ERROR: Guild {_guildId} not found!");
+                        return;
+                    }
 
-            var cmds = new List<SlashCommandBuilder>
+                    var cmds = new List<SlashCommandBuilder>
             {
                 new SlashCommandBuilder()
                     .WithName("price")
@@ -513,21 +980,35 @@ namespace RadXPriceBot.Services
                     .WithDescription("Send a detailed price and information embed"),
             };
 
-            try
-            {
-                foreach (var cmd in cmds)
-                {
-                    await guild.CreateApplicationCommandAsync(cmd.Build());
-                    OnLog($"Registered /{cmd.Name} command");
-                }
-            }
-            catch (HttpException ex)
-            {
-                OnLog($"Failed registering commands: {ex.Message}");
-            }
+                    try
+                    {
+                        foreach (var cmd in cmds)
+                        {
+                            await guild.CreateApplicationCommandAsync(cmd.Build());
+                            OnLog($"Registered /{cmd.Name} command");
+                        }
+                    }
+                    catch (HttpException ex)
+                    {
+                        OnLog($"Failed registering commands: {ex.Message}");
+                    }
 
-            await ConfigureBotAsync();
+                    await ConfigureBotAsync();
+                }
+                catch (Exception ex)
+                {
+                    OnLog($"Error in ready handler: {ex.Message}");
+                    if (ex.InnerException != null)
+                    {
+                        OnLog($"Inner exception: {ex.InnerException.Message}");
+                    }
+                }
+            });
+
+            // Return completed task immediately to avoid blocking gateway
+            return Task.CompletedTask;
         }
+
 
         private async Task ConfigureBotAsync()
         {
