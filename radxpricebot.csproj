@@ -28,11 +28,7 @@
     <Page Remove="Resources\**" />
   </ItemGroup>
   
-  <!-- Add these to your .csproj file -->
-<ItemGroup>
-  <Reference Include="System.Windows.Forms" />
-  <Reference Include="System.Drawing" />
-</ItemGroup>
+ 
 
 
   <ItemGroup>
