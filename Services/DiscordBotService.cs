@@ -1093,6 +1093,40 @@ namespace RadXPriceBot.Services
             OnLog("Bot token pair updated successfully");
         }
 
+
+        // Add to DiscordBotService.cs
+        public async Task RefreshPriceDataAsync()
+        {
+            if (_priceSvc == null)
+                return;
+
+            try
+            {
+                // Force refresh metrics
+                var metrics = await _priceSvc.GetTokenMetricsAsync(forceRefresh: true);
+                var pairDetails = await _priceSvc.GetPairDetailsAsync(forceRefresh: true);
+
+                // Update token info
+                _token0Info = pairDetails.token0Info;
+                _token1Info = pairDetails.token1Info;
+
+                // Report refreshed status
+                ReportStatus(metrics, new PairInfo
+                {
+                    Token0 = _token0Info,
+                    Token1 = _token1Info
+                });
+
+                OnLog("Price data refreshed successfully");
+            }
+            catch (Exception ex)
+            {
+                OnLog($"Error refreshing price data: {ex.Message}");
+            }
+        }
+
+
+
         private Task LogAsync(LogMessage msg)
         {
             OnLog(msg.ToString());
@@ -1654,6 +1688,8 @@ namespace RadXPriceBot.Services
                 await command.RespondAsync("❌ Failed to fetch liquidity. Check logs.");
             }
         }
+
+
 
         private async Task HandleTokenInfoCommand(SocketSlashCommand command)
         {

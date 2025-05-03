@@ -269,11 +269,32 @@ namespace RadXPriceBot.ViewModels
 
 
         // Update single bot settings from UI
+        // Update single bot settings from UI with all the new parameters
+        // Update single bot settings from UI with all the new parameters
         public void UpdateSingleBotSettings(
             string token, string guildId, string rpcUrl,
             string swapRouterAddress, List<string> path,
-            string nickname, string statusType, string customStatus)
+            string nickname, string statusType, string customStatus,
+            int updateIntervalSeconds = 30,
+            // New embed parameters
+            bool sendPeriodicEmbeds = false,
+            int embedIntervalMinutes = 60,
+            string embedChannelId = "",
+            string embedColor = "#50E999",
+            bool includeChartInEmbed = true,
+            bool includeTokenInfoInEmbed = true,
+            bool includeLiquidityInfoInEmbed = true,
+            // New swap parameters
+            bool monitorSwapTransactions = true,
+            string swapNotificationChannelId = "",
+            int swapCheckIntervalMs = 15000,
+            // Additional swap parameters
+            decimal minimumBuyThresholdUsd = 0,
+            decimal minimumSellThresholdUsd = 0,
+            bool notifyOnBuys = true,
+            bool notifyOnSells = true)
         {
+            // Update basic bot settings
             _singleBotConfig.Token = token;
             _singleBotConfig.GuildId = guildId;
             _singleBotConfig.RpcUrl = rpcUrl;
@@ -282,9 +303,30 @@ namespace RadXPriceBot.ViewModels
             _singleBotConfig.Nickname = nickname;
             _singleBotConfig.StatusType = statusType;
             _singleBotConfig.CustomStatus = customStatus;
+            _singleBotConfig.UpdateIntervalSeconds = updateIntervalSeconds;
+
+            // Update embed settings
+            _singleBotConfig.SendPeriodicEmbeds = sendPeriodicEmbeds;
+            _singleBotConfig.EmbedIntervalMinutes = embedIntervalMinutes;
+            _singleBotConfig.EmbedChannelId = embedChannelId;
+            _singleBotConfig.EmbedColor = embedColor;
+            _singleBotConfig.IncludeChartInEmbed = includeChartInEmbed;
+            _singleBotConfig.IncludeTokenInfoInEmbed = includeTokenInfoInEmbed;
+            _singleBotConfig.IncludeLiquidityInfoInEmbed = includeLiquidityInfoInEmbed;
+
+            // Update swap notification settings
+            _singleBotConfig.MonitorSwapTransactions = monitorSwapTransactions;
+            _singleBotConfig.SwapNotificationChannelId = swapNotificationChannelId;
+            _singleBotConfig.SwapCheckIntervalMs = swapCheckIntervalMs;
+            _singleBotConfig.MinimumBuyThresholdUsd = minimumBuyThresholdUsd;
+            _singleBotConfig.MinimumSellThresholdUsd = minimumSellThresholdUsd;
+            _singleBotConfig.NotifyOnBuys = notifyOnBuys;
+            _singleBotConfig.NotifyOnSells = notifyOnSells;
 
             SaveSettings();
         }
+
+
 
         public void UpdateBotStatus(string botId, string price, string pairName)
         {
@@ -686,8 +728,12 @@ namespace RadXPriceBot.ViewModels
             OnPropertyChanged(nameof(IsBotRunning));
         }
 
+        // Add this overload method to MainViewModel.cs
         public async Task StartBotAsync(BotConfig config)
         {
+            if (config == null)
+                throw new ArgumentNullException(nameof(config));
+
             // Make sure the config has a path
             if (config.Path == null || !config.Path.Any())
             {
@@ -709,10 +755,21 @@ namespace RadXPriceBot.ViewModels
                 }
             }
 
-            await _botManager.StartBotAsync(config);
+            // If this is the single bot config, use the StartSingleBotAsync method
+            if (config.Id == "single")
+            {
+                await StartSingleBotAsync();
+            }
+            else
+            {
+                // Start a regular bot instance
+                await _botManager.StartBotAsync(config);
+            }
+
             OnPropertyChanged(nameof(IsBotRunning));
             OnPropertyChanged(nameof(IsAnyBotRunning));
         }
+
 
         // Legacy method for starting the single bot - keep for backward compatibility
         public async Task StartBotAsync(
@@ -720,8 +777,26 @@ namespace RadXPriceBot.ViewModels
             string swapRouterAddress, List<string> path,
             string nickname, string statusType, string customStatus)
         {
-            // Update the single bot config
-            UpdateSingleBotSettings(token, guildId, rpcUrl, swapRouterAddress, path, nickname, statusType, customStatus);
+            // Update the single bot config with default values for new parameters
+            UpdateSingleBotSettings(
+                token, guildId, rpcUrl, swapRouterAddress, path,
+                nickname, statusType, customStatus,
+                30, // Default update interval
+                false, // Default send periodic embeds
+                60, // Default embed interval (60 min)
+                "", // Default embed channel ID
+                "#50E999", // Default embed color
+                true, // Default include chart in embed
+                true, // Default include token info in embed
+                true, // Default include liquidity info in embed
+                true, // Default monitor swap transactions
+                "", // Default swap notification channel ID
+                15000, // Default swap check interval
+                0, // Default minimum buy threshold
+                0, // Default minimum sell threshold
+                true, // Default notify on buys
+                true  // Default notify on sells
+            );
 
             // Start the single bot
             await StartSingleBotAsync();
@@ -729,6 +804,9 @@ namespace RadXPriceBot.ViewModels
             OnPropertyChanged(nameof(IsBotRunning));
             OnPropertyChanged(nameof(IsAnyBotRunning));
         }
+
+
+       
 
         public async Task StopBotAsync(string botId)
         {

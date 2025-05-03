@@ -868,7 +868,7 @@ namespace RadXPriceBot.Services
             return tokenInfo.TotalSupply * price;
         }
 
-        public async Task<(string pairAddress, TokenInfo token0Info, TokenInfo token1Info)> GetPairDetailsAsync()
+        public async Task<(string pairAddress, TokenInfo token0Info, TokenInfo token1Info)> GetPairDetailsAsync(bool forceRefresh = false)
         {
             if (_path.Count < 2)
                 throw new InvalidOperationException("Need at least two tokens in path to fetch pair details.");
@@ -882,7 +882,7 @@ namespace RadXPriceBot.Services
             return (pairAddress, token0Info, token1Info);
         }
 
-        public async Task<Dictionary<string, decimal>> GetTokenMetricsAsync()
+        public async Task<Dictionary<string, decimal>> GetTokenMetricsAsync(bool forceRefresh = false)
         {
             try
             {
