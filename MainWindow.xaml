@@ -1025,22 +1025,58 @@
                         </Grid>
 
                         <DataGrid x:Name="BotStatusGrid" 
-                                  ItemsSource="{Binding BotStatuses}"
-                                  AutoGenerateColumns="False"
-                                  CanUserAddRows="False"
-                                  CanUserDeleteRows="False"
-                                  IsReadOnly="True"
-                                  HeadersVisibility="Column"
-                                  Background="Transparent"
-                                  BorderBrush="#404452"
-                                  BorderThickness="1"
-                                  GridLinesVisibility="All"
-                                  HorizontalGridLinesBrush="#20FFFFFF"
-                                  VerticalGridLinesBrush="#20FFFFFF">
+          ItemsSource="{Binding BotStatuses}"
+          AutoGenerateColumns="False"
+          CanUserAddRows="False"
+          CanUserDeleteRows="False"
+          IsReadOnly="True"
+          HeadersVisibility="Column"
+          Background="Transparent"
+          BorderBrush="#404452"
+          BorderThickness="1"
+          GridLinesVisibility="All"
+          HorizontalGridLinesBrush="#20FFFFFF"
+          VerticalGridLinesBrush="#20FFFFFF">
                             <DataGrid.Columns>
                                 <DataGridTextColumn Header="Bot Name" Binding="{Binding BotName}" Width="*"/>
-                                <DataGridTextColumn Header="Pair" Binding="{Binding PairName}" Width="*"/>
-                                <DataGridTextColumn Header="Price" Binding="{Binding CurrentPrice}" Width="*"/>
+                                <DataGridTextColumn Header="Pair" Binding="{Binding EnhancedPairDisplay}" Width="*"/>
+                                <DataGridTextColumn Header="Price" Binding="{Binding PriceWithTrend}" Width="*"/>
+
+                                <!-- New metrics columns -->
+                                <DataGridTextColumn Header="24h Change" Binding="{Binding PriceChange24h}" Width="90">
+                                    <DataGridTextColumn.ElementStyle>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="TextAlignment" Value="Right"/>
+                                            <Setter Property="Foreground" Value="{Binding PriceChangeBrush}"/>
+                                        </Style>
+                                    </DataGridTextColumn.ElementStyle>
+                                </DataGridTextColumn>
+
+                                <DataGridTextColumn Header="7d Change" Binding="{Binding PriceChange7d}" Width="90">
+                                    <DataGridTextColumn.ElementStyle>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="TextAlignment" Value="Right"/>
+                                            <Setter Property="Foreground" Value="{Binding PriceChangeBrush}"/>
+                                        </Style>
+                                    </DataGridTextColumn.ElementStyle>
+                                </DataGridTextColumn>
+
+                                <DataGridTextColumn Header="Volume" Binding="{Binding Volume24h}" Width="100">
+                                    <DataGridTextColumn.ElementStyle>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="TextAlignment" Value="Right"/>
+                                        </Style>
+                                    </DataGridTextColumn.ElementStyle>
+                                </DataGridTextColumn>
+
+                                <DataGridTextColumn Header="Liquidity" Binding="{Binding DetailedLiquidityInfo}" Width="130">
+                                    <DataGridTextColumn.ElementStyle>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="TextAlignment" Value="Right"/>
+                                        </Style>
+                                    </DataGridTextColumn.ElementStyle>
+                                </DataGridTextColumn>
+
                                 <DataGridTemplateColumn Header="Status" Width="100">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
@@ -1057,36 +1093,40 @@
                                                         </Style>
                                                     </Ellipse.Style>
                                                 </Ellipse>
-                                                <TextBlock Text="{Binding Status}" VerticalAlignment="Center"/>
+                                                <TextBlock Text="{Binding StatusWithEmoji}" VerticalAlignment="Center"/>
                                             </StackPanel>
                                         </DataTemplate>
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
+
                                 <DataGridTextColumn Header="Last Updated" Binding="{Binding LastUpdated}" Width="100"/>
+
                                 <DataGridTemplateColumn Header="Actions" Width="180">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
                                             <StackPanel Orientation="Horizontal">
                                                 <Button Content="Start" Width="60" Margin="2,0" 
-                                                        Style="{StaticResource StartButtonStyle}"
-                                                        Click="StartBotFromDashboard_Click" 
-                                                        Tag="{Binding BotId}"
-                                                        Visibility="{Binding IsRunning, Converter={StaticResource BoolToVisibilityConverterInverted}}"/>
+        Style="{StaticResource StartButtonStyle}"
+        Click="StartBotFromDashboard_Click" 
+        Tag="{Binding BotId}"
+        Visibility="{Binding CanStart, Converter={StaticResource BoolToVisibilityConverter}}"/>
+
                                                 <Button Content="Stop" Width="60" Margin="2,0" 
-                                                        Style="{StaticResource StopButtonStyle}"
-                                                        Click="StopBotFromDashboard_Click" 
-                                                        Tag="{Binding BotId}"
-                                                        Visibility="{Binding IsRunning, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                                Style="{StaticResource StopButtonStyle}"
+                                Click="StopBotFromDashboard_Click" 
+                                Tag="{Binding BotId}"
+                                Visibility="{Binding IsRunning, Converter={StaticResource BoolToVisibilityConverter}}"/>
                                                 <Button Content="Details" Width="60" Margin="2,0" 
-                                                        Style="{StaticResource UtilityButtonStyle}"
-                                                        Click="ViewBotDetails_Click" 
-                                                        Tag="{Binding BotId}"/>
+                                Style="{StaticResource UtilityButtonStyle}"
+                                Click="ViewBotDetails_Click" 
+                                Tag="{Binding BotId}"/>
                                             </StackPanel>
                                         </DataTemplate>
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
                             </DataGrid.Columns>
                         </DataGrid>
+
                     </DockPanel>
                 </Border>
             </TabItem>

@@ -1,4 +1,5 @@
 // ViewModels/MainViewModel.cs
+using RadXPriceBot.Data;
 using RadXPriceBot.Services;
 using System;
 using System.Collections.Generic;
@@ -22,6 +23,8 @@ namespace RadXPriceBot.ViewModels
         private BotConfig _selectedBotConfig;
         private bool _isLoadingPairs;
         private ObservableCollection<BotStatusViewModel> _botStatuses = new ObservableCollection<BotStatusViewModel>();
+
+        private readonly DatabaseService _databaseService;
 
         public MainViewModel(Action<string> logAction)
         {
@@ -92,6 +95,7 @@ namespace RadXPriceBot.ViewModels
             OnPropertyChanged(nameof(IsAnyBotRunning));
         }
 
+
         private void BotManager_BotStatusUpdated(object sender, BotStatusEventArgs e)
         {
             // Find the status for this bot
@@ -103,8 +107,8 @@ namespace RadXPriceBot.ViewModels
                 if (botConfig == null)
                     return;
 
-                // Create a new status
-                status = new BotStatusViewModel
+                // Create a new status with DatabaseService
+                status = new BotStatusViewModel(_databaseService)
                 {
                     BotId = e.BotId,
                     BotName = botConfig.Name,
@@ -123,17 +127,105 @@ namespace RadXPriceBot.ViewModels
                 status.PairInfo = e.PairInfo;
             }
 
-            if (e.Metrics != null && e.Metrics.ContainsKey("Price") && e.PairInfo != null)
+            if (e.Metrics != null)
             {
-                string priceText = $"{e.Metrics["Price"]:N6} {e.PairInfo.Token1.Symbol}";
-                if (e.Metrics.ContainsKey("PriceUsd") && e.Metrics["PriceUsd"] > 0)
-                    priceText += $" (${e.Metrics["PriceUsd"]:N4})";
+                // Update simple price information
+                if (e.Metrics.ContainsKey("Price") && e.PairInfo != null)
+                {
+                    string priceText = $"{e.Metrics["Price"]:N6} {e.PairInfo.Token1.Symbol}";
+                    if (e.Metrics.ContainsKey("PriceUsd") && e.Metrics["PriceUsd"] > 0)
+                        priceText += $" (${e.Metrics["PriceUsd"]:N4})";
 
-                status.CurrentPrice = priceText;
+                    status.CurrentPrice = priceText;
+                }
+
+                // Update 24-hour volume
+                if (e.Metrics.ContainsKey("Volume24h"))
+                {
+                    string volumeText = FormatLargeNumber(e.Metrics["Volume24h"]);
+                    status.Volume24h = volumeText;
+                }
+
+                // Update price changes at different time intervals if available
+                if (e.Metrics.ContainsKey("PriceChange15m"))
+                {
+                    decimal change = e.Metrics["PriceChange15m"];
+                    status.PriceChange15Min = change >= 0 ? $"+{change:N2}%" : $"{change:N2}%";
+                }
+
+                if (e.Metrics.ContainsKey("PriceChange30m"))
+                {
+                    decimal change = e.Metrics["PriceChange30m"];
+                    status.PriceChange30Min = change >= 0 ? $"+{change:N2}%" : $"{change:N2}%";
+                }
+
+                if (e.Metrics.ContainsKey("PriceChange1h"))
+                {
+                    decimal change = e.Metrics["PriceChange1h"];
+                    status.PriceChange1Hour = change >= 0 ? $"+{change:N2}%" : $"{change:N2}%";
+                }
+
+                if (e.Metrics.ContainsKey("PriceChange4h"))
+                {
+                    decimal change = e.Metrics["PriceChange4h"];
+                    status.PriceChange4Hour = change >= 0 ? $"+{change:N2}%" : $"{change:N2}%";
+                }
+
+                // Update 24-hour price change if available
+                if (e.Metrics.ContainsKey("PriceChange24h"))
+                {
+                    decimal change = e.Metrics["PriceChange24h"];
+                    status.PriceChange24h = change >= 0 ? $"+{change:N2}%" : $"{change:N2}%";
+                }
+
+                // Update 7-day price change if available
+                if (e.Metrics.ContainsKey("PriceChange7d"))
+                {
+                    decimal change = e.Metrics["PriceChange7d"];
+                    status.PriceChange7d = change >= 0 ? $"+{change:N2}%" : $"{change:N2}%";
+                }
+
+                // Update liquidity change if available
+                if (e.Metrics.ContainsKey("LiquidityChange24h"))
+                {
+                    decimal change = e.Metrics["LiquidityChange24h"];
+                    status.LiquidityChange24h = change >= 0 ? $"+{change:N2}%" : $"{change:N2}%";
+                }
+
+                // Update current liquidity
+                if (e.Metrics.ContainsKey("Liquidity"))
+                {
+                    status.CurrentLiquidity = e.Metrics["Liquidity"];
+                }
+
+                // Update holder count if available
+                if (e.Metrics.ContainsKey("HolderCount"))
+                {
+                    status.HoldersCount = (int)e.Metrics["HolderCount"];
+                }
             }
 
             status.LastUpdated = DateTime.Now.ToString("HH:mm:ss");
+
+            // Force a refresh of the historical data
+            status.ResetHistoricalDataState();
         }
+
+
+        // Helper method to format large numbers
+        private string FormatLargeNumber(decimal number)
+        {
+            if (number >= 1_000_000_000)
+                return $"${number / 1_000_000_000:N2}B";
+            if (number >= 1_000_000)
+                return $"${number / 1_000_000:N2}M";
+            if (number >= 1_000)
+                return $"${number / 1_000:N2}K";
+            return $"${number:N2}";
+        }
+
+
+
 
         public ObservableCollection<PairInfo> Pairs
         {

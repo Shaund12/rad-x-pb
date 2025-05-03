@@ -1,4 +1,4 @@
-// HelpWindow.xaml.cs
+﻿// HelpWindow.xaml.cs
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -49,275 +49,349 @@ namespace RadXPriceBot
             {
                 ["getting-started"] = @"# Getting Started with RadX Price Bot
 
-RadX Price Bot is a tool that allows you to display token prices from decentralized exchanges on Discord.
+RadX Price Bot is a comprehensive tool for displaying real-time token prices and analytics from decentralized exchanges directly in your Discord server.
 
-This application helps you set up and run a Discord bot that monitors token prices and other metrics 
+This application helps you set up and run Discord bots that monitor token prices and other metrics 
 from blockchain networks that implement Uniswap V2-style contracts.
 
 ## Quick Start
 
-1. Create a Discord bot application
+1. Create a Discord application and bot
 2. Configure your RPC endpoint and contract addresses
 3. Start the bot to monitor your selected token pairs
-4. Access real-time price updates directly in your Discord server",
+4. Access real-time price updates directly in your Discord server
+
+## Key Features
+- Real-time price monitoring from blockchain data
+- Multi-bot support for tracking multiple token pairs simultaneously
+- Rich Discord embeds with detailed token analytics and charts
+- Market statistics including liquidity, volume, and market cap
+- Swap transaction monitoring and notifications
+- Customizable presence status and update intervals",
 
                 ["setup"] = @"# Setup Instructions
 
-Follow these steps to set up your RadX Price Bot:
+## Initial Setup
 
 1. Create a Discord application and bot at https://discord.com/developers/applications
-   - Click 'New Application' and give it a name
-   - Go to the 'Bot' tab and click 'Add Bot'
-   - Under the bot settings, enable 'Server Members Intent' and 'Message Content Intent'
-   - Copy the bot token for later use
+   - Create a new application in the Discord Developer Portal
+   - Navigate to the Bot tab and click 'Add Bot'
+   - Under Privileged Gateway Intents, enable 'Presence Intent' and 'Server Members Intent'
+   - Copy your bot token for use in the application
 
 2. Add the bot to your Discord server
    - Go to OAuth2 > URL Generator
-   - Select 'bot' scope and permissions: 'Change Nickname', 'Send Messages', 'Embed Links', 'Read Messages'
-   - Open the generated URL and select your server
+   - Select 'bot' scope and permissions: 'Change Nickname', 'Send Messages', 'Embed Links'
+   - Use the generated URL to add the bot to your server
 
-3. Enter your bot token and guild ID in the settings
-   - Guild ID can be found by right-clicking your server name and selecting 'Copy ID'
-     (Developer Mode must be enabled in Discord settings)
+3. Configure your bot in RadX Price Bot
+   - Enter your bot token and guild ID in the Bot Manager tab
+   - Set basic information like bot name and nickname
+   - Choose a status display type: Price, Reserves, Market Cap, or Custom
 
-4. Configure the RPC endpoint and contract addresses
-   - RPC URL: Obtain from providers like Infura, Alchemy, or your own node
-   - Factory Address: The DEX factory contract address
-   - Router Address: The DEX router contract address
+## Blockchain Connection Setup
 
-5. Start the bot by clicking the 'Start' button",
+1. Obtain a reliable RPC endpoint URL for your target blockchain
+   - Services like Infura, Alchemy, or QuickNode provide RPC endpoints
+   - Free tier endpoints may have rate limits that affect bot performance
+   - Example format: https://mainnet.infura.io/v3/YOUR_API_KEY
+
+2. Configure contract addresses
+   - Factory Address: The DEX factory contract that creates trading pairs
+   - Router Address: The DEX router contract that handles swaps
+   - Common examples:
+     • Uniswap V2 Factory: 0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f
+     • Uniswap V2 Router: 0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D
+
+3. Load trading pairs and select the pair to monitor
+   - Click 'Load Pairs' to retrieve all available pairs from the factory
+   - Select a pair from the dropdown to load its metrics
+   - Use 'Refresh Data' to update the selected pair information",
 
                 ["contracts"] = @"# Contract Requirements
 
-The bot uses standard Uniswap V2 interfaces to interact with decentralized exchanges.
+The bot requires DEX contracts that implement standard Uniswap V2 interfaces:
 
-## Required Interfaces
+## Router Interface
+- `getAmountsOut(uint amountIn, address[] memory path)`: Calculate output amount
+- `factory()`: Get the factory address
 
-### Router
-- `getAmountsOut(uint amountIn, address[] memory path)` - Calculates output amount for a swap
-- `factory()` - Returns the factory address
+## Factory Interface
+- `getPair(address tokenA, address tokenB)`: Get the liquidity pair address
 
-### Factory
-- `getPair(address tokenA, address tokenB)` - Returns pair address for two tokens
+## Pair Interface
+- `getReserves()`: Get current token reserves
+- `token0()`: Get first token address
+- `token1()`: Get second token address
 
-### Pair
-- `getReserves()` - Returns token reserves in the pool
-- `token0()` - Returns address of token0
-- `token1()` - Returns address of token1
-
-### ERC20 Token
-- `symbol()` - Returns token symbol
-- `name()` - Returns token name
-- `decimals()` - Returns token decimals
-- `totalSupply()` - Returns total supply of the token
+## ERC20 Interface
+- `symbol()`: Get token symbol
+- `name()`: Get token name
+- `decimals()`: Get token decimal places
+- `totalSupply()`: Get total token supply
 
 ## Blockchain Compatibility
 
 The bot works with any EVM-compatible network that implements these standard interfaces, including:
 - Ethereum
-- Binance Smart Chain
 - Polygon
+- BNB Smart Chain
 - Arbitrum
 - Optimism
 - Avalanche C-Chain
+- Base
 - And many others",
 
                 ["configuration"] = @"# Bot Configuration
 
+## Multi-Bot Management
+
+The Bot Manager allows you to create and manage multiple bot instances, each monitoring different token pairs:
+
+1. Add a new bot configuration using the 'Add Bot' button
+2. Configure each bot with unique settings:
+   - Name: Identifying name for the bot instance
+   - Token: Discord bot token (can reuse the same token across bots)
+   - Guild ID: Discord server ID where the bot will display information
+   - RPC URL: Blockchain endpoint for this specific bot
+   - Router Address: DEX router contract for price calculations
+   - Token Path: The token pair to monitor (set via 'Use Selected Pair')
+
+3. Starting and stopping bots
+   - Use 'Start Selected Bot' to activate the current configuration
+   - 'Stop Selected Bot' deactivates only the selected bot
+   - 'Stop All Bots' deactivates all running instances
+   - The dashboard shows the status of all configured bots
+
 ## Status Types
 
-The bot supports different types of status displays:
+Configure how the bot appears in Discord:
 
-- **Price**: Shows the current token price
-  - Format: `$RADX: $0.12345 (+2.5%)`
-
-- **Reserves**: Shows the liquidity pool reserves
-  - Format: `LP: 1.2M RADX | 500K USDC`
-
-- **Market Cap**: Shows the token market capitalization
-  - Format: `Market Cap: $12.5M`
-
-- **Custom**: Use your own status text
-  - Any custom text you specify
-
-## Multiple Bot Instances
-
-You can run multiple bot instances to monitor different token pairs:
-
-1. Go to the 'Multi-Bot' tab
-2. Click 'Add Bot' to create a new configuration
-3. Configure the bot with a name and token pair
-4. Start each bot individually or use 'Start All'",
+- **Price**: Shows current token price (e.g., ""$RADX: $0.12345"")
+- **Reserves**: Shows liquidity pool reserves (e.g., ""LP: 1.2M RADX | 500K USDC"")
+- **Market Cap**: Shows token market capitalization (e.g., ""Market Cap: $12.5M"")
+- **Custom**: Define your own status text with variables:
+  • {price}: Current token price
+  • {symbol0}: Base token symbol
+  • {symbol1}: Quote token symbol
+  • {liquidity}: Total pool liquidity in USD
+  • {marketcap}: Token market capitalization",
 
                 ["discord"] = @"# Discord Integration
 
-## Bot Presence
+## Discord Embed Configuration
 
-The bot will update its presence status with the price information according to your selected status type.
+Periodic embeds provide detailed token analytics in Discord channels:
 
-## Commands
+1. Enable periodic embeds in the Discord Embeds tab
+2. Set the embed interval in minutes
+3. Enter the target Discord channel ID
+4. Customize appearance:
+   - Embed Color: Hex color code for the embed sidebar
+   - Include Chart: Adds price chart visualization
+   - Include Token Info: Adds supply and holder statistics
+   - Include Liquidity Info: Adds pool and volume metrics
 
-The bot supports the following commands:
+## Swap Transaction Monitoring
 
-- `!price` - Shows the current token price
-- `!stats` - Shows detailed token statistics
-- `!lp` - Shows liquidity pool information
-- `!help` - Shows available commands
+Monitor and report token swaps in real-time:
 
-## Embed Messages
+1. Enable swap monitoring in the Swap Monitoring tab
+2. Enter the Discord channel ID for swap notifications
+3. Set the swap check interval (milliseconds)
+4. The bot will detect and report:
+   - Buy/sell transactions in the monitored pair
+   - Transaction size and impact
+   - Price impact from swaps
 
-You can send rich embed messages with token information to any channel:
+## Manual Updates
 
-1. Enter the Channel ID in the Discord Integration panel
-2. Select the information you want to include
-3. Click 'Send to Discord' to post the embed
-
-## Customization
-
-You can customize the bot's:
-- Nickname
-- Update interval
-- Status format
-- Embed colors and fields",
+You can also manually send token information to Discord:
+1. Select a token pair to view its details
+2. Enter a channel ID in the 'Discord Channel ID' field
+3. Click 'Send to Discord' to post a rich embed message with current token metrics",
 
                 ["faq-general"] = @"# General Questions
 
 ## What is the RadX Price Bot?
-The RadX Price Bot is a Discord bot that displays token prices and other metrics in real-time. It connects to blockchain networks to fetch data from decentralized exchanges and shows this information in your Discord server.
+The RadX Price Bot is a Discord bot that displays real-time token prices and metrics from decentralized exchanges directly in your Discord server. It connects to blockchain networks to monitor token pairs and can show information like price, liquidity, market cap, and trading volume.
 
 ## How do I invite the bot to my server?
-You need to host the bot yourself using this application and your own Discord bot token. This gives you full control over the bot's functionality and data sources.
+You need to host this application yourself using your own Discord bot token. This gives you full control over the data sources and configuration. Follow these steps:
+   1. Create a Discord application at discord.com/developers/applications
+   2. Set up a bot for your application and copy the token
+   3. Add the bot to your server using the OAuth2 URL generator
+   4. Input your bot token and guild ID in this application
+   5. Configure your blockchain connection settings
+   6. Start the bot
 
-## Is the bot free to use?
-Yes, the RadX Price Bot is completely free and open-source. You may need to pay for your own RPC endpoint if you exceed free tier limits from providers.
+## Can I monitor multiple token pairs at once?
+Yes! Use the Bot Manager tab to create and configure multiple bot instances, each monitoring a different token pair. You can run them simultaneously with different settings and status displays.
 
-## Can I customize what the bot displays?
-Yes, you can customize the bot's nickname, status message, update frequency, and the token pairs it monitors.
+## What status information can the bot display?
+The bot offers several status display options:
+   • Price: Shows the current token price (e.g., ""$RADX: $0.12345"")
+   • Reserves: Shows the liquidity pool reserves (e.g., ""LP: 1.2M RADX | 500K USDC"")
+   • Market Cap: Shows the token market capitalization (e.g., ""Market Cap: $12.5M"")
+   • Custom: Any text format you specify
 
-## Do I need coding knowledge to use this?
-No coding knowledge is required. The application provides a user-friendly interface to configure and run the bot.",
+## How do I set up Discord embeds?
+In the Bot Manager tab:
+   1. Select a bot configuration
+   2. Check ""Send Periodic Embeds"" in the Discord Embeds tab
+   3. Enter the Channel ID where embeds should be sent
+   4. Set the interval (in minutes)
+   5. Choose which information to include (chart, token info, liquidity info)
+   6. Click ""Apply Embed Settings"" and ensure the bot is running",
 
                 ["faq-technical"] = @"# Technical Questions
 
 ## What blockchain networks does this support?
 Any EVM-compatible network that implements Uniswap V2-style contracts, including:
-- Ethereum
-- Binance Smart Chain
-- Polygon
-- Arbitrum
-- Optimism
-- Avalanche C-Chain
-- Many others
+   • Ethereum
+   • Polygon
+   • BNB Smart Chain
+   • Arbitrum
+   • Optimism
+   • Avalanche C-Chain
+   • Base
+   • And many others
 
-## Why can't I see any pairs?
-Make sure you've entered the correct factory contract address and RPC URL. The factory address should be the Uniswap V2 compatible factory for the DEX you're trying to use.
+## Why can't I see any pairs after connecting?
+Check the following:
+   1. Verify the factory contract address is correct for the DEX you're connecting to
+   2. Ensure your RPC URL is valid and responding
+   3. Check that the blockchain network has properly implemented Uniswap V2 interfaces
+   4. Look for errors in the log console that might indicate connection problems
 
-## How do I find contract addresses?
-You can find contract addresses on blockchain explorers like Etherscan or from the DEX's documentation. For popular DEXes:
-- Uniswap V2 Factory: 0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f
-- SushiSwap Factory: 0xC0AEe478e3658e2610c5F7A4A2E1777cE9e4f2Ac
-- PancakeSwap Factory: 0xcA143Ce32Fe78f1f7019d7d551a6402fC5350c73
+## How do I find the correct contract addresses?
+You can find contract addresses from:
+   • The DEX's documentation or GitHub repository
+   • Blockchain explorers like Etherscan, PolygonScan, etc.
+   • Common factory addresses:
+     - Uniswap V2: 0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f (Ethereum)
+     - SushiSwap: 0xC0AEe478e3658e2610c5F7A4A2E1777cE9e4f2Ac (Ethereum)
+     - QuickSwap: 0x5757371414417b8C6CAad45bAeF941aBc7d3Ab32 (Polygon)
 
-## What RPC providers do you recommend?
-- Infura.io
-- Alchemy.com
-- QuickNode.com
-- Your own Ethereum/blockchain node
+## What's the difference between RPC URL, factory address, and router address?
+• RPC URL: The endpoint to connect to the blockchain (provided by services like Infura or Alchemy)
+• Factory Address: The contract that creates and stores liquidity pair addresses
+• Router Address: The contract that handles token swaps and provides pricing information
 
-## How often does the bot update prices?
-By default, the bot updates every 30 seconds. You can configure this interval in the settings to be as frequent as every 5 seconds.",
+## What is swap transaction monitoring?
+This feature tracks token swap transactions in the liquidity pool. When enabled, the bot will detect and report trades in your selected Discord channel. Configure this in the Swap Monitoring tab under Bot Manager.
+
+## How do I adjust the UI scaling?
+Use the UI Scale dropdown in the top-right corner to adjust the application size from 75% to 200%. This is particularly useful for high-DPI displays or to fit more information on smaller screens.",
 
                 ["troubleshooting"] = @"# Troubleshooting
 
-## The bot is not responding
-Check that:
-- Your bot token and guild ID are correct
-- The bot has proper permissions in your Discord server
-- You've enabled required intents in the Discord developer portal
-- Your internet connection is stable
+## The bot is not responding or connecting to Discord
+Check these common issues:
+   1. Verify your bot token is correct and not expired
+   2. Ensure the bot has been added to your server with proper permissions (Send Messages, Embed Links, Change Nickname)
+   3. Check that you've enabled the required Gateway Intents in the Discord Developer Portal
+   4. Restart the application to refresh the connection
+   5. Look for any firewall or network issues blocking Discord connections
 
-## Price information is incorrect
-Ensure you've:
-- Selected the correct LP pair
-- Configured the path correctly (token order matters)
-- Entered the right router contract address
-- Connected to a reliable and up-to-date RPC endpoint
+## Price information is incorrect or not updating
+Try these solutions:
+   1. Make sure you've selected the correct LP pair
+   2. Verify the token path is in the right order (typically base token first, quote token second)
+   3. Check that your RPC provider is supplying current blockchain data
+   4. Try increasing the update interval if you're experiencing rate limiting
+   5. Use the ""Refresh Data"" button to force a manual update
+   6. Restart the bot if data appears stale
 
-## I'm getting RPC errors
-Your RPC endpoint may be:
-- Rate-limited (exceeding allowed calls)
-- Temporarily down for maintenance
-- Unreliable or slow
+## I'm getting RPC errors or timeouts
+RPC issues are usually related to:
+   1. Rate limiting on free tier endpoints - consider using a paid service
+   2. Network congestion or outages - try a different RPC provider
+   3. Incorrect RPC URL format - double-check for typos
+   4. Using the wrong network (e.g., Ethereum RPC for a Polygon token)
+   5. Firewall or network restrictions - ensure outbound connections are allowed
 
-Solutions:
-- Switch to a different RPC provider
-- Upgrade to a paid plan with higher limits
-- Increase the update interval to reduce API calls
+## The bot keeps disconnecting from Discord
+This might be caused by:
+   1. Discord API rate limits - increase your update intervals
+   2. Unstable internet connection - ensure you have reliable connectivity
+   3. Memory issues - restart the application periodically
+   4. Discord service disruptions - check Discord status page
 
-## The bot keeps disconnecting
-This could be due to:
-- Discord's rate limiting
-- Internet connectivity issues
-- Memory leaks in long-running instances
+## My bot's nickname isn't changing
+Ensure the bot has the ""Change Nickname"" permission in your Discord server, and that its role is positioned below the server owner's role in the hierarchy.",
 
-Try:
-- Increasing the update interval
-- Restarting the application periodically
-- Running the bot on a more reliable connection",
+                ["advanced-usage"] = @"# Advanced Usage
 
-                ["about"] = @"# About RadX Price Bot
+## Customizing the embed appearance
+Yes, you can:
+   1. Change the embed color by entering a hex color code
+   2. Toggle which information sections appear
+   3. Edit the bot's nickname to change how it appears in the server
+   4. Use a custom status format for unique displays
 
-RadX Price Bot is a Discord bot for displaying token prices and metrics from decentralized exchanges.
+## Optimizing swap transaction monitoring
+To optimize swap monitoring:
+   1. Set an appropriate interval based on token activity
+   2. For busy pairs, increase the interval to avoid rate limiting
+   3. Use a dedicated bot instance just for swap monitoring
+   4. Consider using a premium RPC provider for higher throughput
 
-Version 1.0.0
-� 2025 Your Name
+## Backing up bot configurations
+The application automatically saves your settings to a local file. For manual backups, you can copy your settings file from the application directory.
 
-This application allows you to create and manage Discord bots that track cryptocurrency prices
-and other metrics directly from blockchain data sources. It's designed to be user-friendly
-while providing powerful features for crypto communities.
+## Data Storage
 
-## Features
+The application stores historical data locally:
+- Price history for supported tokens
+- Liquidity reserves history
+- Configuration settings
 
-- Real-time token price monitoring
-- Support for multiple blockchain networks
-- Customizable Discord presence
-- Rich embed messages with token analytics
-- Multi-bot management for different token pairs
-- Direct blockchain data querying without relying on third-party APIs",
+Database maintenance is automatic with cleanup of old records after 30 days.",
 
-                ["technologies"] = @"# Technologies Used
+                ["about"] = @"# RadX Price Bot
 
-RadX Price Bot is built using modern software technologies:
+Version 2.3.0
+© 2025 RadX Development Team
 
-## Core Technologies
-- C# / .NET 9
-- WPF for the user interface
-- Nethereum for blockchain interactions
-- Discord.NET for Discord API integration
+A comprehensive Discord bot for displaying real-time token prices and analytics from decentralized exchanges.
 
-## Blockchain Integration
-- Web3 provider integration
-- Smart contract ABIs for DEX interactions
-- ERC20 standard implementations
-- Gas-efficient read-only calls
+## Key Features
+- 🔄 Real-time price monitoring from blockchain data
+- 🤖 Multi-bot support for tracking multiple token pairs simultaneously
+- 📊 Rich Discord embeds with detailed token analytics and charts
+- 📈 Market statistics including liquidity, volume, and market cap
+- 🔔 Swap transaction monitoring and notifications
+- 🎨 Customizable presence status and update intervals
+- 🌐 Support for any EVM-compatible blockchain network
 
-## UX/UI
-- Modern WPF styling
-- Responsive design patterns
-- Multi-threading for non-blocking UI
-- Application state persistence
+## Technologies Used
+- C# 13.0 / .NET 9 Framework
+- WPF with modern UI design principles
+- Nethereum for blockchain interaction
+- Discord.NET for seamless Discord integration
+- Entity Framework Core for data persistence
+- Multi-threading for responsive UI and background tasks
 
-## Data Management
-- JSON configuration storage
-- Secure token management
-- Local caching for performance optimization
-- Exception handling and logging",
+## Recent Improvements
+- Enhanced Discord embed visualizations
+- Improved token data caching for faster performance
+- Advanced multi-bot management interface
+- Token swap monitoring system
+- Dynamic UI scaling
+
+## License
+MIT License
+
+## Acknowledgments
+Special thanks to the Nethereum and Discord.NET development teams for their excellent libraries.
+Thanks to the RadX community for testing and feedback.",
 
                 ["license"] = @"# License
 
 ## MIT License
 
-Copyright (c) 2025 Your Name
+Copyright (c) 2025 RadX Development Team
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the ""Software""), to deal
@@ -335,13 +409,10 @@ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
-## Acknowledgments
-
-Thanks to the Nethereum and Discord.NET teams for their excellent libraries."
+SOFTWARE."
             };
         }
+
 
         private bool MatchContentToSection(string content)
         {
@@ -535,7 +606,7 @@ Thanks to the Nethereum and Discord.NET teams for their excellent libraries."
                     var bulletText = line.TrimStart().Substring(2);
                     var bulletPara = new Paragraph(new Run(bulletText)) { Margin = new Thickness(15, 0, 0, 5) };
                     bulletPara.Inlines.InsertBefore(bulletPara.Inlines.FirstInline,
-                        new Run("� ") { FontWeight = FontWeights.Bold });
+                        new Run("• ") { FontWeight = FontWeights.Bold });
                     document.Blocks.Add(bulletPara);
                 }
                 // Numbered lists
