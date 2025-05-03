@@ -36,12 +36,14 @@ jobs:
       run: dotnet restore ${{ env.Solution_Name }}
 
     - name: Create Resources directory
+      shell: pwsh
       run: |
         if (-not (Test-Path -Path "Resources")) {
           New-Item -ItemType Directory -Path "Resources"
         }
 
     - name: Add Logo Image
+      shell: pwsh
       run: |
         if (-not (Test-Path -Path "Resources\RadXLogo.png")) {
           Invoke-WebRequest -Uri "https://raw.githubusercontent.com/microsoft/fluentui-system-icons/master/assets/Bot/SVG/ic_fluent_bot_24_regular.svg" -OutFile "Resources\RadXLogo.png"
@@ -51,14 +53,17 @@ jobs:
       run: msbuild ${{ env.Solution_Name }} /p:Configuration=${{ matrix.configuration }}
 
     - name: Test
+      shell: pwsh
       run: |
-        $testProjects = Get-ChildItem -Path "*.Tests.csproj" -Recurse
-        if ($testProjects) {
+        $testProjects = Get-ChildItem -Path . -Filter "*.Tests.csproj" -Recurse
+        if ($testProjects.Count -gt 0) {
           foreach ($project in $testProjects) {
+            Write-Host "Running tests for: $($project.FullName)"
             dotnet test $project.FullName --configuration ${{ matrix.configuration }} --no-build --verbosity normal
           }
         } else {
           Write-Host "No test projects found."
+        }
 
     - name: Publish with MSBuild
       run: msbuild ${{ env.Project_Path }} /t:Publish /p:Configuration=${{ matrix.configuration }} /p:PublishDir=publish\ /p:SelfContained=true /p:PublishSingleFile=true /p:IncludeNativeLibrariesForSelfExtract=true /p:PublishReadyToRun=true /p:PublishTrimmed=false /p:RuntimeIdentifier=win-x64
