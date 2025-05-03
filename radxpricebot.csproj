@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
-	<RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <ApplicationIcon>radxpb.ico</ApplicationIcon>
     <Title>Rad-X Price Bot</Title>
     <PackageIcon>Radxpb.png</PackageIcon>
@@ -27,25 +27,6 @@
     <EmbeddedResource Remove="Resources\**" />
     <None Remove="Resources\**" />
     <Page Remove="Resources\**" />
-  </ItemGroup>
-  
-  <!-- Add these to your .csproj file -->
-
-
-
-  <ItemGroup>
-    <COMReference Include="{215d64d2-031c-33c7-96e3-61794cd1ee61}">
-      <WrapperTool>tlbimp</WrapperTool>
-      <VersionMinor>4</VersionMinor>
-      <VersionMajor>2</VersionMajor>
-      <Guid>215d64d2-031c-33c7-96e3-61794cd1ee61</Guid>
-    </COMReference>
-    <COMReference Include="{d37e2a3e-8545-3a39-9f4f-31827c9124ab}">
-      <WrapperTool>tlbimp</WrapperTool>
-      <VersionMinor>4</VersionMinor>
-      <VersionMajor>2</VersionMajor>
-      <Guid>d37e2a3e-8545-3a39-9f4f-31827c9124ab</Guid>
-    </COMReference>
   </ItemGroup>
 
   <ItemGroup>
