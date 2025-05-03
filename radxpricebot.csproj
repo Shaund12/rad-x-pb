@@ -1,12 +1,22 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk.WindowsDesktop">
 
   <PropertyGroup>
+    <!-- WinExe + WPF on .NET 9 -->
     <OutputType>WinExe</OutputType>
     <TargetFramework>net9.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+
+    <!-- C# niceties -->
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <UseWPF>true</UseWPF>
+
+    <!-- Single RID for your publish -->
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+
+    <!-- Prevent any COMReference resolution -->
+    <ResolveComReferences>false</ResolveComReferences>
+
+    <!-- Icons & metadata -->
     <ApplicationIcon>radxpb.ico</ApplicationIcon>
     <Title>Rad-X Price Bot</Title>
     <PackageIcon>Radxpb.png</PackageIcon>
@@ -16,13 +26,16 @@
     <DebugType>none</DebugType>
     <WarningLevel>1</WarningLevel>
   </PropertyGroup>
-
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
     <DebugType>none</DebugType>
     <WarningLevel>1</WarningLevel>
   </PropertyGroup>
 
+  <!-- Nuke any old COMReference entries entirely -->
+  <!-- (Deleting the <ItemGroup> that contained <COMReference> fixes MSB3290 warnings) -->
+
   <ItemGroup>
+    <!-- Clean out any Resources folder items so they don't accidentally embed twice -->
     <Compile Remove="Resources\**" />
     <EmbeddedResource Remove="Resources\**" />
     <None Remove="Resources\**" />
@@ -42,7 +55,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Update="ChatGPT Image Apr 29, 2025, 06_28_27 PM.png">
+    <None Update="Radxpb.png">
       <Pack>True</Pack>
       <PackagePath>\</PackagePath>
     </None>
