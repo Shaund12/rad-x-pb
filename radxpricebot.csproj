@@ -1,14 +1,16 @@
-﻿<Project Sdk="Microsoft.NET.Sdk.WindowsDesktop">
+<Project Sdk="Microsoft.NET.Sdk.WindowsDesktop">
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net9.0-windows</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+
+    <!-- Enable both WPF and WinForms assemblies -->
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
 
-    <!-- Tell the SDK which RIDs you plan to publish for -->
+    <!-- Declare the RID you’re publishing for -->
     <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
 
     <!-- App metadata -->
@@ -21,16 +23,13 @@
     <DebugType>none</DebugType>
     <WarningLevel>1</WarningLevel>
   </PropertyGroup>
-
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
     <DebugType>none</DebugType>
     <WarningLevel>1</WarningLevel>
   </PropertyGroup>
 
-  <!-- 
-    Remove manual References to WinForms/Drawing —
-    the WindowsDesktop SDK will auto-include them.
-  -->
+  <!-- remove any hard-coded References to System.Windows.Forms/System.Drawing—
+       the SDK will auto-include them now that UseWindowsForms is true -->
 
   <ItemGroup>
     <Compile Remove="Resources\**" />
@@ -39,21 +38,7 @@
     <Page Remove="Resources\**" />
   </ItemGroup>
 
-  <!-- Your COM imports (tlbimp) remain if you still need them -->
-  <ItemGroup>
-    <COMReference Include="{215d64d2-031c-33c7-96e3-61794cd1ee61}">
-      <WrapperTool>tlbimp</WrapperTool>
-      <VersionMinor>4</VersionMinor>
-      <VersionMajor>2</VersionMajor>
-      <Guid>215d64d2-031c-33c7-96e3-61794cd1ee61</Guid>
-    </COMReference>
-    <COMReference Include="{d37e2a3e-8545-3a39-9f4f-31827c9124ab}">
-      <WrapperTool>tlbimp</WrapperTool>
-      <VersionMinor>4</VersionMinor>
-      <VersionMajor>2</VersionMajor>
-      <Guid>d37e2a3e-8545-3a39-9f4f-31827c9124ab</Guid>
-    </COMReference>
-  </ItemGroup>
+  <!-- COMReference entries removed entirely -->
 
   <ItemGroup>
     <Content Include="radxpb.ico" />
