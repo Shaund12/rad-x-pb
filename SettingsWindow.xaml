@@ -2,59 +2,212 @@
 <Window x:Class="RadXPriceBot.SettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Settings"
-        Height="300" Width="400"
+        xmlns:local="clr-namespace:RadXPriceBot"
+        Title="Application Settings"
+        Height="520" Width="680"
         Background="{StaticResource PanelBgBrush}"
         Foreground="{StaticResource PrimaryBrush}"
         FontFamily="Consolas"
-        WindowStartupLocation="CenterOwner">
+        WindowStartupLocation="CenterOwner"
+        BorderBrush="{StaticResource AccentBrush}"
+        BorderThickness="1">
 
-    <Grid Margin="15">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
-        </Grid.RowDefinitions>
+	<Window.Resources>
+		<!-- Enhanced section header style -->
+		<Style x:Key="SectionHeaderStyle" TargetType="TextBlock">
+			<Setter Property="FontSize" Value="16"/>
+			<Setter Property="FontWeight" Value="Bold"/>
+			<Setter Property="Foreground" Value="{StaticResource AccentBrush}"/>
+			<Setter Property="Margin" Value="0,15,0,8"/>
+		</Style>
 
-        <ScrollViewer Grid.Row="0">
-            <StackPanel>
-                <TextBlock Text="Discord Bot Token:"/>
-                <TextBox x:Name="BotTokenTextBox" Margin="0,4,0,10"/>
+		<!-- Card style for sections -->
+		<Style x:Key="SettingCardStyle" TargetType="Border">
+			<Setter Property="Background" Value="#FF282A36"/>
+			<Setter Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+			<Setter Property="BorderThickness" Value="1"/>
+			<Setter Property="CornerRadius" Value="8"/>
+			<Setter Property="Padding" Value="15"/>
+			<Setter Property="Margin" Value="0,0,0,10"/>
+			<Setter Property="Effect">
+				<Setter.Value>
+					<DropShadowEffect BlurRadius="10" ShadowDepth="1" Opacity="0.3"/>
+				</Setter.Value>
+			</Setter>
+		</Style>
 
-                <TextBlock Text="Guild ID:"/>
-                <TextBox x:Name="GuildIdTextBox" Margin="0,4,0,10"/>
+		<!-- Enhanced checkbox style -->
+		<Style x:Key="ModernCheckBoxStyle" TargetType="CheckBox" BasedOn="{StaticResource {x:Type CheckBox}}">
+			<Setter Property="Margin" Value="0,8,0,8"/>
+			<Setter Property="Foreground" Value="{StaticResource PrimaryBrush}"/>
+		</Style>
 
-                <TextBlock Text="RPC Endpoint URL:"/>
-                <TextBox x:Name="RpcUrlTextBox" Margin="0,4,0,10"/>
+		<!-- Slider style - fixed XML syntax error -->
+		<Style x:Key="CustomSliderStyle" TargetType="{x:Type Slider}">
+			<Setter Property="Margin" Value="0,8,0,8"/>
+			<Setter Property="Foreground" Value="{StaticResource PrimaryBrush}"/>
+			<Setter Property="Background" Value="#FF282A36"/>
+			<Setter Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+		</Style>
+	</Window.Resources>
 
-                <TextBlock Text="Swap Router Address:"/>
-                <TextBox x:Name="SwapRouterAddressTextBox" Margin="0,4,0,10"/>
+	<Border BorderBrush="{StaticResource AccentBrush}" BorderThickness="0,0,0,0">
+		<Grid>
+			<Grid.RowDefinitions>
+				<RowDefinition Height="Auto"/>
+				<RowDefinition Height="*"/>
+				<RowDefinition Height="Auto"/>
+			</Grid.RowDefinitions>
 
-                <TextBlock Text="Factory Address:"/>
-                <TextBox x:Name="FactoryAddressTextBox" Margin="0,4,0,10"/>
+			<!-- Header with app icon and title -->
+			<Border Background="#FF1E1F29" Grid.Row="0" Padding="15,10">
+				<DockPanel LastChildFill="True">
+					<TextBlock Text="⚙️" FontSize="22" VerticalAlignment="Center" Margin="0,0,10,0"/>
+					<TextBlock Text="Application Settings" FontSize="18" FontWeight="Bold" Foreground="{StaticResource AccentBrush}" VerticalAlignment="Center"/>
+				</DockPanel>
+			</Border>
 
-                <TextBlock Text="Bot Nickname:"/>
-                <TextBox x:Name="BotNicknameTextBox" Margin="0,4,0,10"/>
+			<ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="20,10,20,10">
+				<StackPanel>
+					<!-- UI Settings Section -->
+					<TextBlock Text="UI Settings" Style="{StaticResource SectionHeaderStyle}"/>
+					<Border Style="{StaticResource SettingCardStyle}">
+						<Grid>
+							<Grid.ColumnDefinitions>
+								<ColumnDefinition Width="*"/>
+								<ColumnDefinition Width="*"/>
+							</Grid.ColumnDefinitions>
+							<Grid.RowDefinitions>
+								<RowDefinition Height="Auto"/>
+								<RowDefinition Height="Auto"/>
+								<RowDefinition Height="Auto"/>
+							</Grid.RowDefinitions>
 
-                <TextBlock Text="Default Status:"/>
-                <ComboBox x:Name="StatusTypeComboBox" Margin="0,4,0,10">
-                    <ComboBoxItem Content="Price"/>
-                    <ComboBoxItem Content="Reserves"/>
-                    <ComboBoxItem Content="Market Cap"/>
-                    <ComboBoxItem Content="Custom"/>
-                </ComboBox>
+							<!-- DPI Scaling -->
+							<StackPanel Grid.Column="0" Grid.Row="0">
+								<TextBlock Text="DPI Scaling" FontWeight="SemiBold" Margin="0,0,0,5"/>
+								<Grid>
+									<Grid.ColumnDefinitions>
+										<ColumnDefinition Width="*"/>
+										<ColumnDefinition Width="Auto"/>
+									</Grid.ColumnDefinitions>
+									<Slider x:Name="DpiScalingSlider" Minimum="0.75" Maximum="2.0"
+                                            Value="1.0" TickFrequency="0.25" IsSnapToTickEnabled="True"
+                                            Style="{StaticResource CustomSliderStyle}"/>
+									<TextBlock Grid.Column="1" Text="{Binding ElementName=DpiScalingSlider, Path=Value, StringFormat={}{0:0.00}x}"
+                                               VerticalAlignment="Center" Margin="10,0,0,0"/>
+								</Grid>
+							</StackPanel>
 
-                <TextBlock Text="Custom Status:"/>
-                <TextBox x:Name="CustomStatusTextBox" Margin="0,4,0,10"/>
-                
-                <!-- Add the checkbox for minimize-on-close -->
-                <CheckBox x:Name="MinimizeOnCloseCheckBox" Content="Minimize instead of close" 
-                          Margin="0,10,0,10" IsChecked="True"/>
-            </StackPanel>
-        </ScrollViewer>
+							<!-- Theme -->
+							<StackPanel Grid.Column="1" Grid.Row="0" Margin="15,0,0,0">
+								<TextBlock Text="Theme" FontWeight="SemiBold" Margin="0,0,0,5"/>
+								<ComboBox x:Name="ThemeComboBox" IsEnabled="False">
+									<ComboBoxItem Content="Neon Dark (Default)" IsSelected="True"/>
+									<ComboBoxItem Content="Light" IsEnabled="False"/>
+									<ComboBoxItem Content="System" IsEnabled="False"/>
+								</ComboBox>
+							</StackPanel>
 
-        <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,15,0,0">
-            <Button Content="Save" Width="80" Click="SaveButton_Click" Margin="0,0,10,0"/>
-            <Button Content="Cancel" Width="80" Click="CancelButton_Click"/>
-        </StackPanel>
-    </Grid>
+							<!-- Application Behavior -->
+							<StackPanel Grid.Column="0" Grid.Row="1" Grid.ColumnSpan="2" Margin="0,15,0,0">
+								<TextBlock Text="Application Behavior" FontWeight="SemiBold" Margin="0,0,0,5"/>
+								<CheckBox x:Name="MinimizeOnCloseCheckBox" Content="Minimize to system tray instead of closing"
+                                          Style="{StaticResource ModernCheckBoxStyle}" IsChecked="True"/>
+								<CheckBox x:Name="StartWithWindowsCheckBox" Content="Start application when Windows starts"
+                                          Style="{StaticResource ModernCheckBoxStyle}"/>
+								<CheckBox x:Name="StartMinimizedCheckBox" Content="Start application minimized"
+                                          Style="{StaticResource ModernCheckBoxStyle}"/>
+							</StackPanel>
+
+							<!-- Notifications -->
+							<StackPanel Grid.Column="0" Grid.Row="2" Grid.ColumnSpan="2" Margin="0,15,0,0">
+								<TextBlock Text="Notifications" FontWeight="SemiBold" Margin="0,0,0,5"/>
+								<CheckBox x:Name="EnableNotificationsCheckBox" Content="Enable desktop notifications"
+                                          Style="{StaticResource ModernCheckBoxStyle}" IsChecked="True"/>
+								<CheckBox x:Name="NotifyPriceAlertsCheckBox" Content="Notify on price alerts"
+                                          Style="{StaticResource ModernCheckBoxStyle}" IsChecked="True"/>
+								<CheckBox x:Name="NotifyErrorsCheckBox" Content="Notify on connection errors"
+                                          Style="{StaticResource ModernCheckBoxStyle}" IsChecked="True"/>
+							</StackPanel>
+						</Grid>
+					</Border>
+
+					<!-- Data Settings Section -->
+					<TextBlock Text="Data Settings" Style="{StaticResource SectionHeaderStyle}"/>
+					<Border Style="{StaticResource SettingCardStyle}">
+						<StackPanel>
+							<TextBlock Text="Default RPC Endpoint" FontWeight="SemiBold" Margin="0,0,0,5"/>
+							<TextBox x:Name="RpcUrlTextBox" Margin="0,0,0,10"/>
+
+							<Grid>
+								<Grid.ColumnDefinitions>
+									<ColumnDefinition Width="*"/>
+									<ColumnDefinition Width="*"/>
+								</Grid.ColumnDefinitions>
+
+								<StackPanel Grid.Column="0" Margin="0,0,5,0">
+									<TextBlock Text="Auto-Refresh Interval" FontWeight="SemiBold" Margin="0,0,0,5"/>
+									<ComboBox x:Name="RefreshIntervalComboBox">
+										<ComboBoxItem Content="15 Seconds" Tag="15"/>
+										<ComboBoxItem Content="30 Seconds" Tag="30" IsSelected="True"/>
+										<ComboBoxItem Content="1 Minute" Tag="60"/>
+										<ComboBoxItem Content="5 Minutes" Tag="300"/>
+									</ComboBox>
+								</StackPanel>
+
+								<StackPanel Grid.Column="1" Margin="5,0,0,0">
+									<TextBlock Text="Chart Time Range" FontWeight="SemiBold" Margin="0,0,0,5"/>
+									<ComboBox x:Name="ChartTimeRangeComboBox">
+										<ComboBoxItem Content="24 Hours" Tag="24"/>
+										<ComboBoxItem Content="1 Week" Tag="168" IsSelected="True"/>
+										<ComboBoxItem Content="1 Month" Tag="720"/>
+									</ComboBox>
+								</StackPanel>
+							</Grid>
+						</StackPanel>
+					</Border>
+
+					<!-- Advanced Settings Section -->
+					<TextBlock Text="Advanced Settings" Style="{StaticResource SectionHeaderStyle}"/>
+					<Border Style="{StaticResource SettingCardStyle}">
+						<StackPanel>
+							<CheckBox x:Name="EnableDebugModeCheckBox" Content="Enable debug logging"
+                                      Style="{StaticResource ModernCheckBoxStyle}"/>
+							<CheckBox x:Name="SaveLogsToFileCheckBox" Content="Save logs to file"
+                                      Style="{StaticResource ModernCheckBoxStyle}" IsChecked="True"/>
+
+							<Grid Margin="0,10,0,0">
+								<Grid.ColumnDefinitions>
+									<ColumnDefinition Width="*"/>
+									<ColumnDefinition Width="Auto"/>
+								</Grid.ColumnDefinitions>
+								<Button x:Name="ViewLogsButton" Content="View Logs" Grid.Column="0" Height="32" Margin="0,0,5,0"/>
+								<Button x:Name="ClearCacheButton" Content="Clear Cache" Grid.Column="1" Height="32"/>
+							</Grid>
+						</StackPanel>
+					</Border>
+				</StackPanel>
+			</ScrollViewer>
+
+			<!-- Bottom action buttons -->
+			<Border Grid.Row="2" Background="#FF1E1F29" Padding="20,15">
+				<Grid>
+					<Grid.ColumnDefinitions>
+						<ColumnDefinition Width="Auto"/>
+						<ColumnDefinition Width="*"/>
+						<ColumnDefinition Width="Auto"/>
+						<ColumnDefinition Width="Auto"/>
+					</Grid.ColumnDefinitions>
+
+					<Button x:Name="ResetToDefaultsButton" Grid.Column="0" Content="Reset to Defaults" Width="140"/>
+					<StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right">
+						<Button Content="Apply" Width="100" Click="SaveButton_Click" Margin="0,0,10,0"/>
+						<Button Content="Cancel" Width="100" Click="CancelButton_Click"/>
+					</StackPanel>
+				</Grid>
+			</Border>
+
+		</Grid>
+	</Border>
 </Window>

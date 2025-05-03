@@ -75,6 +75,8 @@ namespace RadXPriceBot.Services
             _botInstances = new Dictionary<string, BotInstance>();
         }
 
+
+
         // Method renamed to StartBotAsyncImpl to avoid duplicate name conflict
         private async Task<string> StartBotAsyncImpl(BotConfig config)
         {
@@ -124,7 +126,28 @@ namespace RadXPriceBot.Services
                 if (config.SendPeriodicEmbeds && !string.IsNullOrEmpty(config.EmbedChannelId)
                     && ulong.TryParse(config.EmbedChannelId, out ulong channelId))
                 {
-                    botService.SetEmbedInterval(config.EmbedIntervalMinutes, channelId);
+                    botService.SetEmbedInterval(config.EmbedIntervalMinutes, channelId,
+                        config.IncludeChartInEmbed,
+                        config.IncludeTokenInfoInEmbed,
+                        config.IncludeLiquidityInfoInEmbed,
+                        config.EmbedColor);
+
+                    _logAction($"Enabled periodic embeds for bot '{config.Name}' " +
+                              $"(interval: {config.EmbedIntervalMinutes} minutes, channel: {config.EmbedChannelId})");
+                }
+
+                // ADDED: Enable swap transaction monitoring if configured
+                if (config.MonitorSwapTransactions && !string.IsNullOrEmpty(config.SwapNotificationChannelId)
+                    && ulong.TryParse(config.SwapNotificationChannelId, out ulong swapChannelId))
+                {
+                    botService.EnableSwapMonitoring(swapChannelId, config.SwapCheckIntervalMs);
+                    _logAction($"Enabled swap transaction monitoring for bot '{config.Name}' " +
+                              $"(channel: {config.SwapNotificationChannelId}, check interval: {config.SwapCheckIntervalMs}ms)");
+                }
+                else
+                {
+                    _logAction($"Swap transaction monitoring is disabled for bot '{config.Name}' - " +
+                              "to enable it, set MonitorSwapTransactions to true and provide a valid SwapNotificationChannelId");
                 }
 
                 await botService.StartAsync();
@@ -160,27 +183,6 @@ namespace RadXPriceBot.Services
             }
         }
 
-        // Public method that calls the implementation
-        public Task<string> StartBotAsync(BotConfig config)
-        {
-            return StartBotAsyncImpl(config);
-        }
-
-        // Add this method to BotManager to update embed settings for a running bot
-        public void UpdateBotEmbedSettings(
-            string botId,
-            bool sendPeriodicEmbeds,
-            int embedIntervalMinutes,
-            string embedChannelId)
-        {
-            if (_botInstances.TryGetValue(botId, out var botInstance))
-            {
-                botInstance.UpdateEmbedSettings(
-                    sendPeriodicEmbeds,
-                    embedIntervalMinutes,
-                    embedChannelId);
-            }
-        }
 
         public async Task SwitchPairAsync(string botId, List<string> newPath, string rpcUrl, string routerAddress)
         {
@@ -298,6 +300,71 @@ namespace RadXPriceBot.Services
             }
         }
 
+        // Add this method to BotManager.cs
+        // Add this to BotManager.cs if it doesn't already exist
+        public void UpdateSwapMonitoringSettings(
+    string botId,
+    bool monitorSwapTransactions,
+    string swapNotificationChannelId,
+    int swapCheckIntervalMs = 15000)
+        {
+            _logAction?.Invoke($"DEBUG in UpdateSwapMonitoringSettings for bot {botId}:");
+            _logAction?.Invoke($"  - MonitorSwapTransactions: {monitorSwapTransactions}");
+            _logAction?.Invoke($"  - SwapNotificationChannelId: '{swapNotificationChannelId}'");
+            _logAction?.Invoke($"  - SwapCheckIntervalMs: {swapCheckIntervalMs}");
+
+            if (!_botInstances.TryGetValue(botId, out var botInstance))
+            {
+                _logAction?.Invoke($"ERROR: Bot {botId} not found. Cannot update swap monitoring settings.");
+                return;
+            }
+
+            if (!botInstance.IsRunning)
+            {
+                _logAction?.Invoke($"ERROR: Bot {botId} is not running. Cannot update swap monitoring settings.");
+                return;
+            }
+
+            try
+            {
+                _logAction?.Invoke($"Updating swap monitoring settings for bot {botId}");
+
+                if (monitorSwapTransactions && !string.IsNullOrEmpty(swapNotificationChannelId))
+                {
+                    if (ulong.TryParse(swapNotificationChannelId, out ulong channelId))
+                    {
+                        // Enable swap monitoring in the bot service
+                        _logAction?.Invoke($"DEBUG: Parsed channel ID successfully: {channelId}");
+                        botInstance.BotService.EnableSwapMonitoring(channelId, swapCheckIntervalMs);
+                        _logAction?.Invoke($"Successfully enabled swap transaction monitoring for bot {botId} " +
+                                         $"(channel: {swapNotificationChannelId}, interval: {swapCheckIntervalMs}ms)");
+                    }
+                    else
+                    {
+                        _logAction?.Invoke($"ERROR: Failed to parse channel ID '{swapNotificationChannelId}' as ulong");
+                        _logAction?.Invoke($"Swap transaction monitoring was NOT enabled for bot {botId}");
+                    }
+                }
+                else
+                {
+                    // Disable swap monitoring
+                    botInstance.BotService.DisableSwapMonitoring();
+                    _logAction?.Invoke($"Disabled swap transaction monitoring for bot {botId}");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logAction?.Invoke($"ERROR updating swap monitoring settings for bot {botId}: {ex.Message}");
+                if (ex.InnerException != null)
+                {
+                    _logAction?.Invoke($"Inner exception: {ex.InnerException.Message}");
+                }
+            }
+        }
+
+
+
+
         // Legacy method
         // Legacy method
         public async Task StopAsync()
@@ -312,6 +379,39 @@ namespace RadXPriceBot.Services
 
             // Use the existing StopBotAsync method to properly stop the bot instance
             await StopBotAsync(defaultBotId);
+        }
+
+        // Add to Services/BotManager.cs
+
+        // Add this method to update embed settings for a running bot
+        public void UpdateBotEmbedSettings(
+            string botId,
+            bool sendPeriodicEmbeds,
+            int embedIntervalMinutes,
+            string embedChannelId)
+        {
+            if (_botInstances.TryGetValue(botId, out var botInstance))
+            {
+                if (sendPeriodicEmbeds && !string.IsNullOrEmpty(embedChannelId)
+                    && ulong.TryParse(embedChannelId, out ulong channelId))
+                {
+                    _logAction($"Enabling periodic embeds for bot '{botInstance.Name}' " +
+                             $"(interval: {embedIntervalMinutes} minutes, channel: {embedChannelId})");
+
+                    botInstance.BotService.SetEmbedInterval(embedIntervalMinutes, channelId);
+                }
+                else
+                {
+                    _logAction($"Disabling periodic embeds for bot '{botInstance.Name}'");
+                    botInstance.BotService.DisableEmbeds();
+                }
+            }
+        }
+
+        // Add this method to start a bot with a specific configuration
+        public async Task<string> StartBotAsync(BotConfig config)
+        {
+            return await StartBotAsyncImpl(config);
         }
 
 

@@ -9,6 +9,7 @@ using Nethereum.Util;
 using Nethereum.Web3;
 using Nethereum.Hex.HexTypes;
 using Nethereum.ABI.FunctionEncoding.Attributes;
+using RadXPriceBot.Data;
 
 namespace RadXPriceBot.Services
 {
@@ -67,6 +68,8 @@ namespace RadXPriceBot.Services
         private readonly List<string> _path;
         private readonly UnitConversion _uconv = new UnitConversion();
         private readonly Action<string> _logger; // Add logger field
+        private readonly DatabaseService _dbService; // Add database service
+        private readonly bool _useDbCache; // Flag to use database cache
 
         private const string USDC_POL_ADDRESS = "0xbCfB3FCa16b12C7756CD6C24f1cC0AC0E38569CF";
         private const string VTRO_ADDRESS = "0xDECAF2f187Cb837a42D26FA364349Abc3e80Aa5D";
@@ -140,12 +143,16 @@ namespace RadXPriceBot.Services
             ""stateMutability"":""view"",""type"":""function""
         }]";
 
-        public PriceService(string rpcUrl, string routerAddress, List<string> path, Action<string> logger = null)
+        public PriceService(string rpcUrl, string routerAddress, List<string> path, Action<string> logger = null, bool useDbCache = true)
         {
             _web3 = new Web3(rpcUrl);
             _routerContract = _web3.Eth.GetContract(RouterAbi, routerAddress);
             _path = path;
             _logger = logger ?? (msg => Console.WriteLine(msg)); // Default to Console.WriteLine if no logger provided
+            _useDbCache = useDbCache;
+
+            // Initialize database service
+            _dbService = new DatabaseService(_logger);
 
             var factoryAddress = _routerContract
                 .GetFunction("factory")
@@ -168,6 +175,35 @@ namespace RadXPriceBot.Services
                 {
                     var price = reserve1 / reserve0;
                     _logger($"Price calculated from reserves: {price}");
+
+                    // Record price in database if pair exists
+                    try
+                    {
+                        var pairAddress = await GetPairAddress(_path[0], _path[1]);
+                        if (pairAddress != "0x0000000000000000000000000000000000000000")
+                        {
+                            // Get the pair from database
+                            var dbPair = await _dbService.GetPairByAddressAsync(pairAddress);
+                            if (dbPair != null)
+                            {
+                                // Get token USD price if available
+                                decimal? usdPrice = null;
+                                var token0 = await GetTokenInfoAsync(_path[0]);
+                                if (token0.UsdPrice > 0)
+                                {
+                                    usdPrice = token0.UsdPrice;
+                                }
+
+                                // Add to price history
+                                await _dbService.AddPriceHistoryAsync(dbPair.Id, price, usdPrice);
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger($"Failed to record price history: {ex.Message}");
+                    }
+
                     return price;
                 }
 
@@ -199,6 +235,17 @@ namespace RadXPriceBot.Services
         {
             try
             {
+                // Try to get token from database first if caching is enabled
+                if (_useDbCache)
+                {
+                    var dbToken = await _dbService.GetTokenByAddressAsync(tokenAddress);
+                    if (dbToken != null && dbToken.UsdPrice.HasValue && dbToken.UsdPrice.Value > 0)
+                    {
+                        _logger($"Using cached USD price for {dbToken.Symbol}: ${dbToken.UsdPrice.Value}");
+                        return dbToken.UsdPrice.Value;
+                    }
+                }
+
                 var tokenInfo = await GetTokenInfoAsync(tokenAddress);
                 _logger($"Calculating USD price for {tokenInfo.Symbol} ({tokenAddress})");
 
@@ -206,6 +253,21 @@ namespace RadXPriceBot.Services
                 if (tokenAddress.Equals(USDC_POL_ADDRESS, StringComparison.OrdinalIgnoreCase))
                 {
                     _logger($"{tokenInfo.Symbol} is a stablecoin, returning 1.0 USD");
+
+                    // Update token in database with USD price
+                    if (_useDbCache)
+                    {
+                        var dbToken = await _dbService.GetOrCreateTokenAsync(new TokenInfo
+                        {
+                            Address = tokenAddress,
+                            Symbol = tokenInfo.Symbol,
+                            Name = tokenInfo.Name,
+                            Decimals = tokenInfo.Decimals,
+                            TotalSupply = tokenInfo.TotalSupply,
+                            UsdPrice = 1.0m
+                        });
+                    }
+
                     return 1.0m; // USDC.pol is pegged to USD
                 }
 
@@ -214,6 +276,14 @@ namespace RadXPriceBot.Services
                 if (usdcPrice.HasValue)
                 {
                     _logger($"Found direct USDC.pol pair. Price of {tokenInfo.Symbol}: ${usdcPrice.Value}");
+
+                    // Update token in database with USD price
+                    if (_useDbCache)
+                    {
+                        tokenInfo.UsdPrice = usdcPrice.Value;
+                        await _dbService.GetOrCreateTokenAsync(tokenInfo);
+                    }
+
                     return usdcPrice.Value;
                 }
 
@@ -231,6 +301,14 @@ namespace RadXPriceBot.Services
                         {
                             var usdPrice = vtroTokenPrice.Value * vtroUsdPrice.Value;
                             _logger($"Calculated via {vtroInfo.Symbol}: 1 {tokenInfo.Symbol} = {vtroTokenPrice.Value} {vtroInfo.Symbol} = ${usdPrice} USD");
+
+                            // Update token in database with USD price
+                            if (_useDbCache)
+                            {
+                                tokenInfo.UsdPrice = usdPrice;
+                                await _dbService.GetOrCreateTokenAsync(tokenInfo);
+                            }
+
                             return usdPrice;
                         }
                     }
@@ -250,6 +328,14 @@ namespace RadXPriceBot.Services
                         {
                             var usdPrice = wvtruTokenPrice.Value * wvtruUsdPrice.Value;
                             _logger($"Calculated via {wvtruInfo.Symbol}: 1 {tokenInfo.Symbol} = {wvtruTokenPrice.Value} {wvtruInfo.Symbol} = ${usdPrice} USD");
+
+                            // Update token in database with USD price
+                            if (_useDbCache)
+                            {
+                                tokenInfo.UsdPrice = usdPrice;
+                                await _dbService.GetOrCreateTokenAsync(tokenInfo);
+                            }
+
                             return usdPrice;
                         }
                     }
@@ -286,6 +372,47 @@ namespace RadXPriceBot.Services
             }
 
             return result;
+        }
+
+        // Add method to get price history from database
+        public async Task<List<(DateTime timestamp, decimal price, decimal? usdPrice)>> GetPriceHistoryAsync(
+            DateTime? startTime = null, DateTime? endTime = null, int maxPoints = 1000)
+        {
+            try
+            {
+                if (_path.Count < 2)
+                {
+                    _logger("Path must contain at least two tokens to get price history");
+                    return new List<(DateTime, decimal, decimal?)>();
+                }
+
+                // Get pair address
+                var pairAddress = await GetPairAddress(_path[0], _path[1]);
+                if (pairAddress == "0x0000000000000000000000000000000000000000")
+                {
+                    _logger("No pair exists for the specified tokens");
+                    return new List<(DateTime, decimal, decimal?)>();
+                }
+
+                // Get pair entity from database
+                var pair = await _dbService.GetPairByAddressAsync(pairAddress);
+                if (pair == null)
+                {
+                    _logger($"Pair not found in database: {pairAddress}");
+                    return new List<(DateTime, decimal, decimal?)>();
+                }
+
+                // Get price history
+                var history = await _dbService.GetPriceHistoryAsync(pair.Id, startTime, endTime, maxPoints);
+
+                // Convert to simplified format
+                return history.Select(h => (h.Timestamp, h.Price, h.UsdPrice)).ToList();
+            }
+            catch (Exception ex)
+            {
+                _logger($"Error getting price history: {ex.Message}");
+                return new List<(DateTime, decimal, decimal?)>();
+            }
         }
 
 
@@ -457,6 +584,44 @@ namespace RadXPriceBot.Services
                     {
                         decimal price = reserve1Adjusted / reserve0Adjusted;
                         _logger($"Price: 1 {infoA.Symbol} = {price} {infoB.Symbol}");
+
+                        // Store price in database
+                        try
+                        {
+                            if (_useDbCache)
+                            {
+                                // Store or update the pair in database
+                                var pairInfo = new PairInfo
+                                {
+                                    Address = pairAddress,
+                                    Token0 = infoA,
+                                    Token1 = infoB,
+                                    Reserve0 = reserve0Adjusted,
+                                    Reserve1 = reserve1Adjusted,
+                                    Price = price,
+                                    Liquidity = reserve1Adjusted + (reserve0Adjusted * price)
+                                };
+
+                                var dbPair = await _dbService.GetOrCreatePairAsync(pairInfo);
+
+                                // Add price history entry
+                                if (dbPair != null)
+                                {
+                                    decimal? usdPrice = null;
+                                    if (infoB.Symbol == "USDC.POL" || infoB.Symbol == "USDC" || infoB.Symbol == "USDT")
+                                    {
+                                        usdPrice = price;
+                                    }
+
+                                    await _dbService.AddPriceHistoryAsync(dbPair.Id, price, usdPrice);
+                                }
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger($"Error storing pair data: {ex.Message}");
+                        }
+
                         return reversed ? 1 / price : price;
                     }
                 }
@@ -471,6 +636,48 @@ namespace RadXPriceBot.Services
                     {
                         decimal price = reserve1Adjusted / reserve0Adjusted;
                         _logger($"Price: 1 {infoB.Symbol} = {price} {infoA.Symbol}");
+
+                        // Store price in database
+                        try
+                        {
+                            if (_useDbCache)
+                            {
+                                // Note: In this case, the price is inverted for our storage since
+                                // we're storing from token0->token1 perspective
+                                decimal invertedPrice = price > 0 ? 1 / price : 0;
+
+                                // Store or update the pair in database
+                                var pairInfo = new PairInfo
+                                {
+                                    Address = pairAddress,
+                                    Token0 = infoB,
+                                    Token1 = infoA,
+                                    Reserve0 = reserve0Adjusted,
+                                    Reserve1 = reserve1Adjusted,
+                                    Price = invertedPrice,
+                                    Liquidity = reserve0Adjusted + (reserve1Adjusted * invertedPrice)
+                                };
+
+                                var dbPair = await _dbService.GetOrCreatePairAsync(pairInfo);
+
+                                // Add price history entry
+                                if (dbPair != null)
+                                {
+                                    decimal? usdPrice = null;
+                                    if (infoA.Symbol == "USDC.POL" || infoA.Symbol == "USDC" || infoA.Symbol == "USDT")
+                                    {
+                                        usdPrice = invertedPrice;
+                                    }
+
+                                    await _dbService.AddPriceHistoryAsync(dbPair.Id, invertedPrice, usdPrice);
+                                }
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger($"Error storing pair data: {ex.Message}");
+                        }
+
                         // We want price of tokenA in terms of tokenB
                         return reversed ? price : 1 / price;
                     }
@@ -521,21 +728,65 @@ namespace RadXPriceBot.Services
                 // We need to check if our path tokens match the pair's order
                 bool isPathOrderSameAsPair = _path[0].Equals(token0, StringComparison.InvariantCultureIgnoreCase);
 
+                decimal reserve0, reserve1;
+
                 if (isPathOrderSameAsPair)
                 {
-                    var r0 = _uconv.FromWei(reservesOutput.Reserve0, token0Info.Decimals);
-                    var r1 = _uconv.FromWei(reservesOutput.Reserve1, token1Info.Decimals);
-                    _logger($"Reserves for {token0Info.Symbol}/{token1Info.Symbol}: {r0} {token0Info.Symbol}, {r1} {token1Info.Symbol}");
-                    return (r0, r1);
+                    reserve0 = _uconv.FromWei(reservesOutput.Reserve0, token0Info.Decimals);
+                    reserve1 = _uconv.FromWei(reservesOutput.Reserve1, token1Info.Decimals);
+                    _logger($"Reserves for {token0Info.Symbol}/{token1Info.Symbol}: {reserve0} {token0Info.Symbol}, {reserve1} {token1Info.Symbol}");
                 }
                 else
                 {
                     // Path order is different from pair order, so we need to swap
-                    var r0 = _uconv.FromWei(reservesOutput.Reserve1, token0Info.Decimals);
-                    var r1 = _uconv.FromWei(reservesOutput.Reserve0, token1Info.Decimals);
-                    _logger($"Reserves for {token0Info.Symbol}/{token1Info.Symbol} (swapped): {r0} {token0Info.Symbol}, {r1} {token1Info.Symbol}");
-                    return (r0, r1);
+                    reserve0 = _uconv.FromWei(reservesOutput.Reserve1, token0Info.Decimals);
+                    reserve1 = _uconv.FromWei(reservesOutput.Reserve0, token1Info.Decimals);
+                    _logger($"Reserves for {token0Info.Symbol}/{token1Info.Symbol} (swapped): {reserve0} {token0Info.Symbol}, {reserve1} {token1Info.Symbol}");
                 }
+
+                // Store reserve information in database
+                try
+                {
+                    if (_useDbCache)
+                    {
+                        // Get or create the pair in database
+                        var pairInfo = new PairInfo
+                        {
+                            Address = pairAddress,
+                            Token0 = token0Info,
+                            Token1 = token1Info,
+                            Reserve0 = reserve0,
+                            Reserve1 = reserve1,
+                            Price = reserve0 > 0 ? reserve1 / reserve0 : 0,
+                            Liquidity = reserve1 + (reserve0 * (reserve0 > 0 ? reserve1 / reserve0 : 0))
+                        };
+
+                        var dbPair = await _dbService.GetOrCreatePairAsync(pairInfo);
+
+                        // Add reserve history entry
+                        if (dbPair != null)
+                        {
+                            // Calculate liquidity
+                            decimal liquidity = reserve1;
+                            if (reserve0 > 0)
+                            {
+                                liquidity += reserve0 * (reserve1 / reserve0);
+                            }
+
+                            await _dbService.AddReserveHistoryAsync(
+                                dbPair.Id,
+                                reserve0,
+                                reserve1,
+                                liquidity);
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger($"Error storing reserve data: {ex.Message}");
+                }
+
+                return (reserve0, reserve1);
             }
             catch (Exception ex)
             {
@@ -554,6 +805,28 @@ namespace RadXPriceBot.Services
 
         public async Task<TokenInfo> GetTokenInfoAsync(string tokenAddress)
         {
+            // Try to get token from cache first
+            if (_useDbCache)
+            {
+                var dbToken = await _dbService.GetTokenByAddressAsync(tokenAddress);
+                if (dbToken != null)
+                {
+                    _logger($"Using cached token info for {dbToken.Symbol}");
+
+                    // Convert database entity to TokenInfo
+                    return new TokenInfo
+                    {
+                        Address = dbToken.Address,
+                        Symbol = dbToken.Symbol,
+                        Name = dbToken.Name,
+                        Decimals = dbToken.Decimals,
+                        TotalSupply = dbToken.TotalSupply,
+                        UsdPrice = dbToken.UsdPrice ?? 0
+                    };
+                }
+            }
+
+            // If not in cache or cache disabled, fetch from blockchain
             var tokenContract = _web3.Eth.GetContract(Erc20Abi, tokenAddress);
 
             var symbolFn = tokenContract.GetFunction("symbol");
@@ -566,7 +839,7 @@ namespace RadXPriceBot.Services
             var decimals = await decimalsFn.CallAsync<int>().ConfigureAwait(false);
             var totalSupplyWei = await totalSupplyFn.CallAsync<BigInteger>().ConfigureAwait(false);
 
-            return new TokenInfo
+            var tokenInfo = new TokenInfo
             {
                 Address = tokenAddress,
                 Symbol = symbol,
@@ -574,6 +847,14 @@ namespace RadXPriceBot.Services
                 Decimals = decimals,
                 TotalSupply = _uconv.FromWei(totalSupplyWei, decimals)
             };
+
+            // Store token in database for future use
+            if (_useDbCache)
+            {
+                await _dbService.GetOrCreateTokenAsync(tokenInfo);
+            }
+
+            return tokenInfo;
         }
 
         public async Task<decimal> GetMarketCapAsync(string tokenAddress = null)
@@ -630,6 +911,38 @@ namespace RadXPriceBot.Services
                 _logger($"Price: {price} ({token0Info.Symbol}/{token1Info.Symbol})");
                 _logger($"Market Cap: ${marketCapUsd} USD");
                 _logger($"Liquidity: ${totalLiquidityUsd} USD");
+
+                // After calculating metrics, store the updated pair and price history in the database
+                try
+                {
+                    if (_useDbCache)
+                    {
+                        // Get pair address
+                        var pairAddress = await GetPairAddress(_path[0], _path[1]);
+                        if (pairAddress != "0x0000000000000000000000000000000000000000")
+                        {
+                            // Create PairInfo object
+                            var pairInfo = new PairInfo
+                            {
+                                Address = pairAddress,
+                                Token0 = token0Info,
+                                Token1 = token1Info,
+                                Reserve0 = reserve0,
+                                Reserve1 = reserve1,
+                                Price = price,
+                                Liquidity = totalLiquidityUsd
+                            };
+
+                            // Store in database
+                            await _dbService.GetOrCreatePairAsync(pairInfo);
+                        }
+                    }
+                }
+                catch (Exception dbEx)
+                {
+                    // Log database error but don't fail the operation
+                    _logger($"Error storing metrics in database: {dbEx.Message}");
+                }
 
                 return new Dictionary<string, decimal>
                 {
@@ -700,7 +1013,6 @@ namespace RadXPriceBot.Services
                 return "0x0000000000000000000000000000000000000000";
             }
         }
-
 
         // Also need to add the ReservesOutput class here since it's referenced in the code
         [Nethereum.ABI.FunctionEncoding.Attributes.FunctionOutput]

@@ -28,6 +28,16 @@ namespace RadXPriceBot.Services
         public bool IncludeChartInEmbed { get; set; } = true;
         public bool IncludeTokenInfoInEmbed { get; set; } = true;
         public bool IncludeLiquidityInfoInEmbed { get; set; } = true;
+        // New properties for swap monitoring
+        public bool MonitorSwapTransactions { get; set; } = true;  // Enable by default
+        public string SwapNotificationChannelId { get; set; } = ""; // Discord channel ID for swap notifications
+        public int SwapCheckIntervalMs { get; set; } = 15000; // Check for new transactions every 15 seconds
+
+        // Add these new properties for minimum thresholds
+        public decimal MinimumBuyThresholdUsd { get; set; } = 10.0m; // Only notify for buys >= $10
+        public decimal MinimumSellThresholdUsd { get; set; } = 10.0m; // Only notify for sells >= $10
+        public bool NotifyOnBuys { get; set; } = true;  // Whether to notify on buy transactions
+        public bool NotifyOnSells { get; set; } = true; // Whether to notify on sell transactions
     }
 
     public class BotSettings
@@ -64,6 +74,10 @@ namespace RadXPriceBot.Services
         // Advanced Settings
         public bool? DebugMode { get; set; } = false;
         public bool? SaveLogsToFile { get; set; } = true;
+        public bool UseDbCache { get; set; } = true;
+        public int PriceHistoryRetentionDays { get; set; } = 30;
+        public bool EnableHistoricalDataCollection { get; set; } = true;
+        public int MaxPriceHistoryPointsToReturn { get; set; } = 1000;
     }
 
     public static class SettingsService

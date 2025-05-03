@@ -8,6 +8,7 @@ using Nethereum.Contracts;
 using Nethereum.JsonRpc.Client;
 using Nethereum.Util;
 using Nethereum.Web3;
+using RadXPriceBot.Data;
 
 namespace RadXPriceBot.Services
 {
@@ -72,6 +73,7 @@ namespace RadXPriceBot.Services
         private readonly string _rpcUrl;
         private readonly Action<string> _logger;
         private readonly int _requestTimeoutSeconds = 30;
+        private readonly DatabaseService _dbService;
 
         // Use the shared constants
         private const string USDC_POL_ADDRESS = TokenAddresses.USDC_POL_ADDRESS;
@@ -140,6 +142,7 @@ namespace RadXPriceBot.Services
             _web3 = new Web3(rpcUrl);
             _factory = _web3.Eth.GetContract(FactoryAbi, factoryAddress);
             _logger = msg => Console.WriteLine(msg);
+            _dbService = new DatabaseService(_logger);
         }
 
         public LpService(string rpcUrl, string factoryAddress, Action<string> logger = null)
@@ -156,14 +159,29 @@ namespace RadXPriceBot.Services
 
             _factory = _web3.Eth.GetContract(FactoryAbi, factoryAddress);
             _logger = logger ?? (msg => Console.WriteLine(msg));
+
+            // Initialize database service
+            _dbService = new DatabaseService(_logger);
         }
 
-        public async Task<List<PairInfo>> GetAllPairsAsync()
+        public async Task<List<PairInfo>> GetAllPairsAsync(bool useCache = true)
         {
             try
             {
                 _logger($"Starting pair loading from {_rpcUrl}");
                 _logger($"Factory address: {_factory.Address}");
+
+                // Try to get pairs from database first if using cache
+                if (useCache)
+                {
+                    var cachedPairs = await _dbService.GetAllPairsAsync(_factory.Address);
+                    if (cachedPairs.Any())
+                    {
+                        _logger($"Loaded {cachedPairs.Count} pairs from database cache");
+                        return _dbService.ConvertToPairInfoList(cachedPairs);
+                    }
+                    _logger("No cached pairs found, loading from blockchain...");
+                }
 
                 var lengthFn = _factory.GetFunction("allPairsLength");
                 var allPairsFn = _factory.GetFunction("allPairs");
@@ -432,6 +450,14 @@ namespace RadXPriceBot.Services
                     .ToList();
 
                 _logger("Sorting completed - prioritized WVTRU/USDC.pol and VTRO/USDC.pol pairs");
+
+                // Store pairs in database for future use
+                _logger("Storing pairs in database for future use...");
+                foreach (var pair in sortedPairs)
+                {
+                    await _dbService.GetOrCreatePairAsync(pair, _factory.Address);
+                }
+
                 return sortedPairs;
             }
             catch (Exception ex)
@@ -442,6 +468,15 @@ namespace RadXPriceBot.Services
                     _logger($"Inner exception: {ex.InnerException.Message}");
                 }
                 _logger($"Stack trace: {ex.StackTrace}");
+
+                // Try to return cached pairs as fallback if available
+                var cachedPairs = await _dbService.GetAllPairsAsync(_factory.Address);
+                if (cachedPairs.Any())
+                {
+                    _logger($"Using {cachedPairs.Count} cached pairs from database as fallback");
+                    return _dbService.ConvertToPairInfoList(cachedPairs);
+                }
+
                 return new List<PairInfo>();
             }
         }
@@ -453,12 +488,22 @@ namespace RadXPriceBot.Services
             return 0;
         }
 
-
-   
-        public async Task<PairInfo> GetPairInfoAsync(string pairAddress)
+        public async Task<PairInfo> GetPairInfoAsync(string pairAddress, bool useCache = true)
         {
             try
             {
+                // Try to get from database first if using cache
+                if (useCache)
+                {
+                    var cachedPair = await _dbService.GetPairByAddressAsync(pairAddress);
+                    if (cachedPair != null)
+                    {
+                        _logger($"Loaded pair {cachedPair.Name} from database cache");
+                        return _dbService.ConvertToPairInfo(cachedPair);
+                    }
+                    _logger("No cached pair found, loading from blockchain...");
+                }
+
                 _logger($"Getting info for pair {pairAddress}");
                 var uconv = new UnitConversion();
 
@@ -556,7 +601,7 @@ namespace RadXPriceBot.Services
                     liquidity += reserve0 * price; // Add token0 converted to token1 value
                 }
 
-                return new PairInfo
+                var pairInfo = new PairInfo
                 {
                     Address = pairAddress,
                     Token0 = token0,
@@ -567,10 +612,24 @@ namespace RadXPriceBot.Services
                     Liquidity = liquidity,
                     HolderCount = Math.Max(holderCount0, holderCount1) // Use the higher holder count
                 };
+
+                // Store in database for future use
+                await _dbService.GetOrCreatePairAsync(pairInfo);
+
+                return pairInfo;
             }
             catch (Exception ex)
             {
                 _logger($"Error getting pair info: {ex.Message}");
+
+                // Try to return cached pair as fallback
+                var cachedPair = await _dbService.GetPairByAddressAsync(pairAddress);
+                if (cachedPair != null)
+                {
+                    _logger($"Using cached pair from database as fallback");
+                    return _dbService.ConvertToPairInfo(cachedPair);
+                }
+
                 return null;
             }
         }
@@ -624,6 +683,106 @@ namespace RadXPriceBot.Services
             catch
             {
                 return 1.0m; // Default price ratio of 1:1 if anything fails
+            }
+        }
+
+        // Add method to get price history
+        public async Task<List<(DateTime timestamp, decimal price, decimal? usdPrice)>> GetPriceHistoryAsync(
+            string pairAddress, DateTime? startTime = null, DateTime? endTime = null, int maxPoints = 1000)
+        {
+            try
+            {
+                // Get pair entity from database
+                var pair = await _dbService.GetPairByAddressAsync(pairAddress);
+                if (pair == null)
+                {
+                    _logger($"Pair not found in database: {pairAddress}");
+                    return new List<(DateTime, decimal, decimal?)>();
+                }
+
+                // Get price history
+                var history = await _dbService.GetPriceHistoryAsync(pair.Id, startTime, endTime, maxPoints);
+
+                // Convert to simplified format
+                return history.Select(h => (h.Timestamp, h.Price, h.UsdPrice)).ToList();
+            }
+            catch (Exception ex)
+            {
+                _logger($"Error getting price history: {ex.Message}");
+                return new List<(DateTime, decimal, decimal?)>();
+            }
+        }
+
+        // Add method to get liquidity history
+        public async Task<List<(DateTime timestamp, decimal reserve0, decimal reserve1, decimal liquidity)>> GetLiquidityHistoryAsync(
+            string pairAddress, DateTime? startTime = null, DateTime? endTime = null, int maxPoints = 1000)
+        {
+            try
+            {
+                // Get pair entity from database
+                var pair = await _dbService.GetPairByAddressAsync(pairAddress);
+                if (pair == null)
+                {
+                    _logger($"Pair not found in database: {pairAddress}");
+                    return new List<(DateTime, decimal, decimal, decimal)>();
+                }
+
+                // Get reserve history
+                var history = await _dbService.GetReserveHistoryAsync(pair.Id, startTime, endTime, maxPoints);
+
+                // Convert to simplified format
+                return history.Select(h => (h.Timestamp, h.Reserve0, h.Reserve1, h.Liquidity)).ToList();
+            }
+            catch (Exception ex)
+            {
+                _logger($"Error getting liquidity history: {ex.Message}");
+                return new List<(DateTime, decimal, decimal, decimal)>();
+            }
+        }
+
+        // Add method to store current price in history
+        public async Task RecordPriceHistoryAsync(string pairAddress, decimal price, decimal? usdPrice = null)
+        {
+            try
+            {
+                // Get pair entity from database
+                var pair = await _dbService.GetPairByAddressAsync(pairAddress);
+                if (pair == null)
+                {
+                    _logger($"Cannot record price history - pair not found in database: {pairAddress}");
+                    return;
+                }
+
+                // Add price history record
+                await _dbService.AddPriceHistoryAsync(pair.Id, price, usdPrice);
+                _logger($"Recorded price history for {pair.Name}: {price} (${usdPrice})");
+            }
+            catch (Exception ex)
+            {
+                _logger($"Error recording price history: {ex.Message}");
+            }
+        }
+
+        // Add method to store current reserves in history
+        public async Task RecordReserveHistoryAsync(string pairAddress, decimal reserve0, decimal reserve1, decimal liquidity)
+        {
+            try
+            {
+                // Get pair entity from database
+                var pair = await _dbService.GetPairByAddressAsync(pairAddress);
+                if (pair == null)
+                {
+                    _logger($"Cannot record reserve history - pair not found in database: {pairAddress}");
+                    return;
+                }
+
+                // Add reserve history record
+                await _dbService.AddReserveHistoryAsync(pair.Id, reserve0, reserve1, liquidity);
+                _logger($"Recorded reserve history for {pair.Name}: {reserve0} / {reserve1}");
+            }
+            catch (Exception ex)
+            {
+                _logger($"Error recording reserve history: {ex.Message}");
             }
         }
     }

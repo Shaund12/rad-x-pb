@@ -50,7 +50,7 @@ namespace RadXPriceBot.Services
         private bool _includeLiquidityInfoInEmbed = true;
 
         private ulong _swapNotificationChannelId;
-        private bool _monitorBuyTransactions = false;
+        private bool _monitorSwapTransactions = true;
         private System.Timers.Timer _transactionMonitorTimer;
         private int _transactionCheckIntervalMs = 15000; // Default to check every 15 seconds
 
@@ -133,8 +133,6 @@ namespace RadXPriceBot.Services
             }
         }
 
-
-
         // Modified method to get token thumbnail URL
         private string GetTokenThumbnailUrl(string symbol)
         {
@@ -147,6 +145,23 @@ namespace RadXPriceBot.Services
 
             // Default generic token icon
             return "https://i.imgur.com/gXdWwTR.png";
+        }
+
+        // Add this method to get current metrics from PriceService
+        public async Task<Dictionary<string, decimal>> GetCurrentMetricsAsync()
+        {
+            try
+            {
+                if (_priceSvc == null)
+                    return null;
+                    
+                return await _priceSvc.GetTokenMetricsAsync();
+            }
+            catch (Exception ex)
+            {
+                OnLog($"Error getting current metrics: {ex.Message}");
+                return null;
+            }
         }
 
         public async Task StartAsync()
@@ -205,7 +220,6 @@ namespace RadXPriceBot.Services
         {
             StatusUpdated?.Invoke(this, new BotStatusUpdateEventArgs { Metrics = metrics, PairInfo = pairInfo });
         }
-
 
         private void SetupUpdateTimer()
         {
@@ -327,7 +341,7 @@ namespace RadXPriceBot.Services
         public void EnableSwapMonitoring(ulong channelId, int checkIntervalMs = 15000)
         {
             _swapNotificationChannelId = channelId;
-            _monitorBuyTransactions = true;
+            _monitorSwapTransactions = true;
             _transactionCheckIntervalMs = checkIntervalMs;
 
             // Clean up existing timer if any
@@ -355,7 +369,7 @@ namespace RadXPriceBot.Services
 
         public void DisableSwapMonitoring()
         {
-            _monitorBuyTransactions = false;
+            _monitorSwapTransactions = false;
             _transactionMonitorTimer?.Stop();
             _transactionMonitorTimer?.Dispose();
             _transactionMonitorTimer = null;
@@ -364,7 +378,7 @@ namespace RadXPriceBot.Services
 
         private async Task CheckForNewTransactionsAsync()
         {
-            if (_swapNotificationChannelId == 0 || _client == null || _client.ConnectionState != ConnectionState.Connected)
+            if (!_monitorSwapTransactions || _swapNotificationChannelId == 0 || _client == null || _client.ConnectionState != ConnectionState.Connected)
             {
                 return;
             }
@@ -403,7 +417,6 @@ namespace RadXPriceBot.Services
                 OnLog($"Error checking for transactions: {ex.Message}");
             }
         }
-
 
         private async Task SendSwapNotificationAsync(SwapTransaction swap)
         {
@@ -605,7 +618,6 @@ namespace RadXPriceBot.Services
             return $"${usdValue:N2} 🔥💰💰💰";
         }
 
-
         // Helper method to format token amounts with proper decimals
         private string FormatTokenAmount(decimal amount, int decimals)
         {
@@ -615,7 +627,6 @@ namespace RadXPriceBot.Services
 
             // For very small values
             if (amount < (decimal)Math.Pow(10, -5))
-
             {
                 return amount.ToString("E4"); // Scientific notation
             }
@@ -634,6 +645,7 @@ namespace RadXPriceBot.Services
 
             return $"{address.Substring(0, 6)}...{address.Substring(address.Length - 4)}";
         }
+        
         private async Task SendPeriodicEmbed()
         {
             try
@@ -1001,7 +1013,6 @@ namespace RadXPriceBot.Services
             return formatted;
         }
 
-
         public async Task StopAsync()
         {
             if (!_isRunning)
@@ -1167,7 +1178,6 @@ namespace RadXPriceBot.Services
             // Return completed task immediately to avoid blocking gateway
             return Task.CompletedTask;
         }
-
 
         private async Task ConfigureBotAsync()
         {
@@ -1613,7 +1623,7 @@ namespace RadXPriceBot.Services
                 var reserve0Usd = metrics.ContainsKey("Reserve0Usd") ? metrics["Reserve0Usd"] : 0;
                 var reserve1Usd = metrics.ContainsKey("Reserve1Usd") ? metrics["Reserve1Usd"] : 0;
 
-                // Get token thumbnail URL for the embed
+                                // Get token thumbnail URL for the embed
                 string tokenThumbnailUrl = GetTokenThumbnailUrl(_token0Info?.Symbol);
 
                 var embedBuilder = new EmbedBuilder()

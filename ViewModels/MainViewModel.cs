@@ -243,7 +243,23 @@ namespace RadXPriceBot.ViewModels
                 Nickname = config.Nickname,
                 StatusType = config.StatusType,
                 CustomStatus = config.CustomStatus,
-                UpdateIntervalSeconds = config.UpdateIntervalSeconds
+                UpdateIntervalSeconds = config.UpdateIntervalSeconds,
+                // Add embed settings
+                SendPeriodicEmbeds = config.SendPeriodicEmbeds,
+                EmbedIntervalMinutes = config.EmbedIntervalMinutes,
+                EmbedChannelId = config.EmbedChannelId,
+                EmbedColor = config.EmbedColor,
+                IncludeChartInEmbed = config.IncludeChartInEmbed,
+                IncludeTokenInfoInEmbed = config.IncludeTokenInfoInEmbed,
+                IncludeLiquidityInfoInEmbed = config.IncludeLiquidityInfoInEmbed,
+                // Add swap settings
+                MonitorSwapTransactions = config.MonitorSwapTransactions,
+                SwapNotificationChannelId = config.SwapNotificationChannelId,
+                SwapCheckIntervalMs = config.SwapCheckIntervalMs,
+                MinimumBuyThresholdUsd = config.MinimumBuyThresholdUsd,
+                MinimumSellThresholdUsd = config.MinimumSellThresholdUsd,
+                NotifyOnBuys = config.NotifyOnBuys,
+                NotifyOnSells = config.NotifyOnSells
             }).ToList();
 
             SettingsService.SaveSettings(_settings);
@@ -320,28 +336,36 @@ namespace RadXPriceBot.ViewModels
         }
 
 
+        // Add this method to update swap notification settings
+        
+
+
+
         // Add this method to MainViewModel.cs to update and save multi-bot settings
-        // Add to the UpdateMultiBotSettings method to include embed configuration
         public void UpdateMultiBotSettings(
-            string id,
-            string name,
-            string token,
-            string guildId,
-            string rpcUrl,
-            string swapRouterAddress,
-            List<string> path,
-            string nickname,
-            string statusType,
-            string customStatus,
-            int updateIntervalSeconds,
-            // New parameters
-            bool sendPeriodicEmbeds = false,
-            int embedIntervalMinutes = 60,
-            string embedChannelId = "",
-            string embedColor = "#50E999",
-            bool includeChartInEmbed = true,
-            bool includeTokenInfoInEmbed = true,
-            bool includeLiquidityInfoInEmbed = true)
+     string id,
+     string name,
+     string token,
+     string guildId,
+     string rpcUrl,
+     string swapRouterAddress,
+     List<string> path,
+     string nickname,
+     string statusType,
+     string customStatus,
+     int updateIntervalSeconds,
+     // New parameters
+     bool sendPeriodicEmbeds = false,
+     int embedIntervalMinutes = 60,
+     string embedChannelId = "",
+     string embedColor = "#50E999",
+     bool includeChartInEmbed = true,
+     bool includeTokenInfoInEmbed = true,
+     bool includeLiquidityInfoInEmbed = true,
+     // Add swap parameters
+     bool monitorSwapTransactions = true,
+     string swapNotificationChannelId = "",
+     int swapCheckIntervalMs = 15000)
         {
             var botConfig = BotConfigs.FirstOrDefault(b => b.Id == id);
             if (botConfig == null)
@@ -372,9 +396,16 @@ namespace RadXPriceBot.ViewModels
             botConfig.IncludeTokenInfoInEmbed = includeTokenInfoInEmbed;
             botConfig.IncludeLiquidityInfoInEmbed = includeLiquidityInfoInEmbed;
 
+            // Swap notification settings
+            botConfig.MonitorSwapTransactions = monitorSwapTransactions;
+            botConfig.SwapNotificationChannelId = swapNotificationChannelId;
+            botConfig.SwapCheckIntervalMs = swapCheckIntervalMs;
+
             // Save all settings to persist changes
             SaveSettings();
         }
+
+
 
         // Add this method to update just the embed settings for a bot
         public void UpdateBotEmbedSettings(
@@ -442,17 +473,76 @@ namespace RadXPriceBot.ViewModels
                     }
                 }
 
+                _logAction($"DEBUG: Before setting up swap monitoring settings.");
+
+                // Set swap monitoring settings before starting
+                _singleBotConfig.MonitorSwapTransactions = true; // This should be true
+                _logAction($"DEBUG: Set MonitorSwapTransactions to {_singleBotConfig.MonitorSwapTransactions}");
+
+                // Format the channel ID properly to ensure it's a valid ulong
+                string cleanChannelId = "1340394541571899576".Trim();
+                _singleBotConfig.SwapNotificationChannelId = cleanChannelId;
+                _logAction($"DEBUG: Set SwapNotificationChannelId to '{_singleBotConfig.SwapNotificationChannelId}'");
+
+                _singleBotConfig.SwapCheckIntervalMs = 15000; // 15 seconds interval
+                _logAction($"DEBUG: Set SwapCheckIntervalMs to {_singleBotConfig.SwapCheckIntervalMs}");
+
+                // Test if the channel ID can be parsed as ulong
+                if (ulong.TryParse(cleanChannelId, out ulong testChannelId))
+                {
+                    _logAction($"DEBUG: Channel ID is a valid ulong: {testChannelId}");
+                }
+                else
+                {
+                    _logAction($"ERROR: Channel ID '{cleanChannelId}' cannot be parsed as a ulong!");
+                }
+
+                // Save settings to ensure configuration is persisted
+                SaveSettings();
+                _logAction($"DEBUG: Settings saved.");
+
+                // Start the bot with the properly configured settings
+                _logAction($"DEBUG: Starting bot...");
                 _singleBotInstanceId = await _botManager.StartBotAsync(_singleBotConfig);
+                _logAction($"DEBUG: Bot started with ID: {_singleBotInstanceId}");
+
+                // Rather than directly accessing BotInstances and trying to modify the bot's state,
+                // use the proper UpdateSwapMonitoringSettings method which should handle this correctly
+                if (IsSingleBotRunning)
+                {
+                    _logAction($"DEBUG: Bot is running. Updating swap monitoring settings...");
+                    _botManager.UpdateSwapMonitoringSettings(
+                        _singleBotInstanceId,
+                        true,
+                        cleanChannelId,
+                        15000);
+                    _logAction($"DEBUG: Swap monitoring settings updated.");
+                }
+                else
+                {
+                    _logAction($"WARNING: Bot is not running after start. Cannot update swap settings.");
+                }
 
                 OnPropertyChanged(nameof(IsSingleBotRunning));
                 OnPropertyChanged(nameof(IsAnyBotRunning));
             }
-            catch
+            catch (Exception ex)
             {
+                _logAction($"ERROR starting bot: {ex.Message}");
+                if (ex.InnerException != null)
+                {
+                    _logAction($"Inner exception: {ex.InnerException.Message}");
+                }
                 _singleBotInstanceId = null;
                 throw;
             }
         }
+
+
+
+
+
+
 
         public async Task StopSingleBotAsync()
         {
