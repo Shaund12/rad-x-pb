@@ -31,7 +31,7 @@ namespace RadXPriceBot.Services
         private DiscordSocketClient _client;
         private System.Timers.Timer _updateTimer;
         private System.Timers.Timer _embedTimer; // Timer for sending embeds
-        private const int UPDATE_INTERVAL_MS = 30000; // Update every 30 seconds
+        private const int UPDATE_INTERVAL_MS = 45000; // Update every 30 seconds
         private TokenInfo _token0Info;
         private TokenInfo _token1Info;
         private CancellationTokenSource _cts;
@@ -52,7 +52,7 @@ namespace RadXPriceBot.Services
         private ulong _swapNotificationChannelId;
         private bool _monitorSwapTransactions = true;
         private System.Timers.Timer _transactionMonitorTimer;
-        private int _transactionCheckIntervalMs = 15000; // Default to check every 15 seconds
+        private int _transactionCheckIntervalMs = 30000; // Default to check every 15 seconds
 
         private List<string> _lastProcessedTransactions = new List<string>();
         private const int MAX_STORED_TX_HASHES = 100; // Store only last 100 processed transactions
@@ -243,57 +243,108 @@ namespace RadXPriceBot.Services
 
         private void SetupEmbedTimer()
         {
+            // Clean up any existing timer first
+            if (_embedTimer != null)
+            {
+                _embedTimer.Stop();
+                _embedTimer.Dispose();
+                _embedTimer = null;
+            }
+
             // Only setup if both interval and channel are configured
             if (_embedIntervalMinutes > 0 && _embedChannelId > 0)
             {
+                // Create a new timer with the configured interval
                 _embedTimer = new System.Timers.Timer(_embedIntervalMinutes * 60 * 1000);
                 _embedTimer.Elapsed += async (s, e) =>
                 {
                     try
                     {
+                        OnLog($"Embed timer triggered - attempting to send periodic embed to channel {_embedChannelId}");
                         await SendPeriodicEmbed();
                     }
                     catch (Exception ex)
                     {
-                        OnLog($"Error sending periodic embed: {ex.Message}");
+                        OnLog($"Error in embed timer handler: {ex.Message}");
+                        if (ex.InnerException != null)
+                        {
+                            OnLog($"Inner exception: {ex.InnerException.Message}");
+                        }
                     }
                 };
                 _embedTimer.AutoReset = true;
                 _embedTimer.Start();
-                OnLog($"Embed timer started (interval: {_embedIntervalMinutes} minutes)");
+                OnLog($"Embed timer started (interval: {_embedIntervalMinutes} minutes, channel: {_embedChannelId})");
 
                 // Send an initial embed after startup
                 _ = Task.Run(async () =>
                 {
-                    await Task.Delay(5000); // Wait 5 seconds after startup
-                    await SendPeriodicEmbed();
+                    try
+                    {
+                        await Task.Delay(5000); // Wait 5 seconds after startup
+                        OnLog("Sending initial embed after setup");
+                        await SendPeriodicEmbed();
+                    }
+                    catch (Exception ex)
+                    {
+                        OnLog($"Error sending initial embed: {ex.Message}");
+                    }
                 });
+            }
+            else
+            {
+                OnLog("Cannot setup embed timer: interval or channel ID is not properly configured");
             }
         }
 
+
         // Configure automated embeds
-        public void SetEmbedInterval(int minutes, ulong channelId)
+        // Replace the existing SetEmbedInterval method with this improved version
+        public void SetEmbedInterval(int minutes, ulong channelId,
+            bool includeChart = true,
+            bool includeTokenInfo = true,
+            bool includeLiquidityInfo = true,
+            string embedColor = "#50E999")
         {
-            OnLog($"Setting embed interval to {minutes} minutes for channel {channelId}");
+            OnLog($"Setting embed interval to {minutes} minutes for channel {channelId} (chart={includeChart}, info={includeTokenInfo}, liquidity={includeLiquidityInfo}, color={embedColor})");
 
             // Clean up old timer
-            _embedTimer?.Stop();
-            _embedTimer?.Dispose();
-            _embedTimer = null;
+            if (_embedTimer != null)
+            {
+                _embedTimer.Stop();
+                _embedTimer.Dispose();
+                _embedTimer = null;
+            }
 
+            // Update all settings
             _embedIntervalMinutes = minutes;
             _embedChannelId = channelId;
+            _includeChartInEmbed = includeChart;
+            _includeTokenInfoInEmbed = includeTokenInfo;
+            _includeLiquidityInfoInEmbed = includeLiquidityInfo;
+            _embedColor = embedColor;
 
             // Disable if minutes is 0 or channelId is 0
             if (minutes <= 0 || channelId == 0)
             {
-                OnLog("Automatic embeds disabled");
+                OnLog("Automatic embeds disabled due to invalid settings");
                 return;
             }
 
             // Create a new timer
             _embedTimer = new System.Timers.Timer(minutes * 60 * 1000);
-            _embedTimer.Elapsed += async (s, e) => await SendPeriodicEmbed();
+            _embedTimer.Elapsed += async (s, e) =>
+            {
+                try
+                {
+                    OnLog($"Embed timer triggered at {DateTime.UtcNow:HH:mm:ss}");
+                    await SendPeriodicEmbed();
+                }
+                catch (Exception ex)
+                {
+                    OnLog($"Error in embed timer callback: {ex.Message}");
+                }
+            };
             _embedTimer.AutoReset = true;
             _embedTimer.Start();
 
@@ -302,25 +353,17 @@ namespace RadXPriceBot.Services
             // Send an initial embed
             _ = Task.Run(async () =>
             {
-                await Task.Delay(2000); // Small delay to ensure bot is ready
-                await SendPeriodicEmbed();
+                try
+                {
+                    await Task.Delay(2000); // Small delay to ensure bot is ready
+                    OnLog("Sending initial embed after setup");
+                    await SendPeriodicEmbed();
+                }
+                catch (Exception ex)
+                {
+                    OnLog($"Error sending initial embed: {ex.Message}");
+                }
             });
-        }
-
-        // Overload with additional embed customization options
-        public void SetEmbedInterval(int minutes, ulong channelId,
-            bool includeChart = true,
-            bool includeTokenInfo = true,
-            bool includeLiquidityInfo = true,
-            string embedColor = "#50E999")
-        {
-            _includeChartInEmbed = includeChart;
-            _includeTokenInfoInEmbed = includeTokenInfo;
-            _includeLiquidityInfoInEmbed = includeLiquidityInfo;
-            _embedColor = embedColor;
-
-            // Call the original method to configure the timer
-            SetEmbedInterval(minutes, channelId);
         }
 
         // Method to disable periodic embeds
@@ -338,8 +381,19 @@ namespace RadXPriceBot.Services
             _embedChannelId = 0;
         }
 
+        // In DiscordBotService.cs - modify the EnableSwapMonitoring method
         public void EnableSwapMonitoring(ulong channelId, int checkIntervalMs = 15000)
         {
+            // Save current embed settings before making any changes
+            bool embedsWereEnabled = _embedIntervalMinutes > 0 && _embedChannelId > 0;
+            int currentEmbedIntervalMinutes = _embedIntervalMinutes;
+            ulong currentEmbedChannelId = _embedChannelId;
+            bool currentIncludeChartInEmbed = _includeChartInEmbed;
+            bool currentIncludeTokenInfoInEmbed = _includeTokenInfoInEmbed;
+            bool currentIncludeLiquidityInfoInEmbed = _includeLiquidityInfoInEmbed;
+            string currentEmbedColor = _embedColor;
+
+            // Configure swap monitoring
             _swapNotificationChannelId = channelId;
             _monitorSwapTransactions = true;
             _transactionCheckIntervalMs = checkIntervalMs;
@@ -365,17 +419,60 @@ namespace RadXPriceBot.Services
             _transactionMonitorTimer.Start();
 
             OnLog($"Swap monitoring enabled. Channel: {channelId}, Interval: {checkIntervalMs}ms");
+
+            // IMPORTANT: Restore embed timer if it was previously enabled
+            if (embedsWereEnabled && (_embedTimer == null || !_embedTimer.Enabled))
+            {
+                OnLog($"Restoring embed timer after enabling swap monitoring: Interval={currentEmbedIntervalMinutes}min, Channel={currentEmbedChannelId}");
+                SetEmbedInterval(
+                    currentEmbedIntervalMinutes,
+                    currentEmbedChannelId,
+                    currentIncludeChartInEmbed,
+                    currentIncludeTokenInfoInEmbed,
+                    currentIncludeLiquidityInfoInEmbed,
+                    currentEmbedColor
+                );
+            }
         }
+
+
+
 
         public void DisableSwapMonitoring()
         {
+            // Save current embed timer state
+            bool embedTimerWasEnabled = _embedTimer != null && _embedTimer.Enabled;
+            int currentEmbedIntervalMinutes = _embedIntervalMinutes;
+            ulong currentEmbedChannelId = _embedChannelId;
+
             _monitorSwapTransactions = false;
             _transactionMonitorTimer?.Stop();
             _transactionMonitorTimer?.Dispose();
             _transactionMonitorTimer = null;
+
             OnLog("Swap monitoring disabled");
+
+            // Ensure embed timer is still properly configured after disabling swap monitoring
+            if (currentEmbedIntervalMinutes > 0 && currentEmbedChannelId > 0 && (!embedTimerWasEnabled || _embedTimer == null || !_embedTimer.Enabled))
+            {
+                OnLog($"Restoring embed timer configuration after disabling swap monitoring (interval: {currentEmbedIntervalMinutes} minutes, channel: {currentEmbedChannelId})");
+                SetEmbedInterval(currentEmbedIntervalMinutes, currentEmbedChannelId,
+                    _includeChartInEmbed,
+                    _includeTokenInfoInEmbed,
+                    _includeLiquidityInfoInEmbed,
+                    _embedColor);
+            }
         }
 
+
+        public async Task ResetTransactionTrackingAsync()
+        {
+            // Clear the processed transactions list to avoid duplicate detection issues
+            _lastProcessedTransactions.Clear();
+            OnLog("Transaction tracking reset");
+        }
+
+        // Add this to DiscordBotService.cs - replace the existing CheckForNewTransactionsAsync method
         private async Task CheckForNewTransactionsAsync()
         {
             if (!_monitorSwapTransactions || _swapNotificationChannelId == 0 || _client == null || _client.ConnectionState != ConnectionState.Connected)
@@ -389,34 +486,78 @@ namespace RadXPriceBot.Services
                 var recentSwaps = await _priceSvc.GetRecentSwapsAsync(10);
                 if (recentSwaps == null || !recentSwaps.Any())
                 {
+                    OnLog("No recent swaps found");
                     return;
                 }
 
-                // Process each transaction
-                foreach (var swap in recentSwaps.Where(s => !_lastProcessedTransactions.Contains(s.TransactionHash)))
+                // Enhanced logging for debugging
+                OnLog($"Found {recentSwaps.Count} recent swap(s). Already processed: {_lastProcessedTransactions.Count} tx(es)");
+
+                // Log the first few transaction hashes for debugging
+                if (recentSwaps.Any())
                 {
+                    var sample = string.Join(", ", recentSwaps.Take(3).Select(s => s.TransactionHash?.Substring(0, 10) + "..."));
+                    OnLog($"Sample tx hashes: {sample}");
+                }
+
+                // Process each transaction that we haven't seen before
+                int newTxCount = 0;
+                foreach (var swap in recentSwaps)
+                {
+                    // Skip if transaction hash is null or already processed
+                    if (string.IsNullOrEmpty(swap.TransactionHash))
+                    {
+                        OnLog("Skipping transaction with null hash");
+                        continue;
+                    }
+
+                    if (_lastProcessedTransactions.Contains(swap.TransactionHash))
+                    {
+                        // For debugging, log which transactions are being skipped as duplicates
+                        OnLog($"Skipping already processed tx: {swap.TransactionHash.Substring(0, 10)}...");
+                        continue;
+                    }
+
+                    // Debug log
+                    OnLog($"New transaction found: {swap.TransactionHash.Substring(0, 10)}... ({(swap.IsBuyTransaction ? "Buy" : "Sell")})");
+                    newTxCount++;
+
                     // Add to processed list to avoid duplicates
                     _lastProcessedTransactions.Add(swap.TransactionHash);
 
-                    // Trim list to avoid memory issues
-                    if (_lastProcessedTransactions.Count > MAX_STORED_TX_HASHES)
+                    // Trim the list to prevent memory buildup
+                    while (_lastProcessedTransactions.Count > MAX_STORED_TX_HASHES)
                     {
                         _lastProcessedTransactions.RemoveAt(0);
                     }
 
-                    // Send notification for both buys and sells if they have valid amounts
-                    if (swap.TokenAmount > 0)
+                    // Skip transactions with invalid amounts
+                    if (swap.TokenAmount <= 0)
                     {
-                        await SendSwapNotificationAsync(swap);
-                        OnLog($"Sent swap notification for TX: {swap.TransactionHash} ({(swap.IsBuyTransaction ? "Buy" : "Sell")})");
+                        OnLog($"Skipping transaction with invalid amount: {swap.TokenAmount}");
+                        continue;
                     }
+
+                    // Send notification
+                    await SendSwapNotificationAsync(swap);
+                    OnLog($"Sent swap notification for TX: {swap.TransactionHash.Substring(0, 10)}... ({(swap.IsBuyTransaction ? "Buy" : "Sell")})");
+                }
+
+                if (newTxCount > 0)
+                {
+                    OnLog($"Processed {newTxCount} new transaction(s)");
                 }
             }
             catch (Exception ex)
             {
                 OnLog($"Error checking for transactions: {ex.Message}");
+                if (ex.InnerException != null)
+                {
+                    OnLog($"Inner exception: {ex.InnerException.Message}");
+                }
             }
         }
+
 
         private async Task SendSwapNotificationAsync(SwapTransaction swap)
         {
@@ -491,7 +632,7 @@ namespace RadXPriceBot.Services
                 builder.WithThumbnailUrl(tokenImageUrl);
             }
 
-            // Add author with wallet info
+            // Add author with wallet info - ensure we're using the real sender, not the router
             builder.WithAuthor(author => {
                 author.Name = $"Trader: {FormatAddress(swap.FromAddress)}";
             });
@@ -528,6 +669,7 @@ namespace RadXPriceBot.Services
             var metadataField = new StringBuilder();
             metadataField.AppendLine($"**TX Hash:** `{FormatAddress(swap.TransactionHash)}`");
             metadataField.AppendLine($"**Time:** <t:{swap.Timestamp.ToUnixTimeSeconds()}:R>");
+            metadataField.AppendLine($"**Trader:** `{FormatAddress(swap.FromAddress)}`"); // Ensure this shows the real trader
 
             builder.AddField("📝 Transaction Data", metadataField.ToString(), false);
 
@@ -581,6 +723,7 @@ namespace RadXPriceBot.Services
 
             return builder.Build();
         }
+
 
         // Helper method to categorize transaction size
         private (string category, string emoji) CategorizeTransactionSize(decimal usdValue)
@@ -645,14 +788,20 @@ namespace RadXPriceBot.Services
 
             return $"{address.Substring(0, 6)}...{address.Substring(address.Length - 4)}";
         }
-        
+
         private async Task SendPeriodicEmbed()
         {
             try
             {
-                if (_client == null || _client.ConnectionState != ConnectionState.Connected)
+                if (_client == null)
                 {
-                    OnLog("Cannot send embed: Discord client not connected");
+                    OnLog("Cannot send embed: Discord client is null");
+                    return;
+                }
+
+                if (_client.ConnectionState != ConnectionState.Connected)
+                {
+                    OnLog($"Cannot send embed: Discord client not connected (current state: {_client.ConnectionState})");
                     return;
                 }
 
@@ -669,15 +818,18 @@ namespace RadXPriceBot.Services
                 var metrics = await _priceSvc.GetTokenMetricsAsync();
                 var pairDetails = await _priceSvc.GetPairDetailsAsync();
 
-                // Find the channel and send the embed
+                // Find the channel
                 var channel = await _client.GetChannelAsync(_embedChannelId) as IMessageChannel;
                 if (channel == null)
                 {
-                    OnLog($"Could not find channel with ID {_embedChannelId}");
+                    OnLog($"Could not find channel with ID {_embedChannelId}. Make sure the bot has access to this channel.");
                     return;
                 }
 
+                OnLog("Creating embed with price and token data");
                 var embed = CreateDetailedPriceEmbed(metrics, pairDetails.token0Info, pairDetails.token1Info, pairDetails.pairAddress);
+
+                OnLog("Sending embed to Discord channel");
                 await channel.SendMessageAsync(embed: embed);
 
                 _lastEmbedSent = DateTime.UtcNow;
@@ -690,8 +842,10 @@ namespace RadXPriceBot.Services
                 {
                     OnLog($"Inner exception: {ex.InnerException.Message}");
                 }
+                OnLog($"Stack trace: {ex.StackTrace}");
             }
         }
+
 
         private Embed CreateDetailedPriceEmbed(Dictionary<string, decimal> metrics, TokenInfo token0, TokenInfo token1, string pairAddress)
         {
@@ -1085,6 +1239,10 @@ namespace RadXPriceBot.Services
                 _nickname = newNickname;
             }
 
+            // FIXED: Reset transaction tracking to prevent duplicate detection issues
+            _lastProcessedTransactions.Clear();
+            OnLog("Transaction tracking reset after switching token pair");
+
             // Refresh token information and update displays
             await LoadTokenInformationAsync();
             await UpdateBotNicknameAsync();
@@ -1095,6 +1253,7 @@ namespace RadXPriceBot.Services
 
 
         // Add to DiscordBotService.cs
+        // And modify the RefreshPriceDataAsync method to reset transaction tracking:
         public async Task RefreshPriceDataAsync()
         {
             if (_priceSvc == null)
@@ -1109,6 +1268,10 @@ namespace RadXPriceBot.Services
                 // Update token info
                 _token0Info = pairDetails.token0Info;
                 _token1Info = pairDetails.token1Info;
+
+                // FIXED: Reset transaction tracking to prevent duplicate detection issues
+                _lastProcessedTransactions.Clear();
+                OnLog("Transaction list cleared");
 
                 // Report refreshed status
                 ReportStatus(metrics, new PairInfo

@@ -21,13 +21,7 @@ namespace RadXPriceBot.ViewModels
         private ObservableCollection<BotConfig> _botConfigs;
         private BotConfig _selectedBotConfig;
         private bool _isLoadingPairs;
-
         private ObservableCollection<BotStatusViewModel> _botStatuses = new ObservableCollection<BotStatusViewModel>();
-
-        // Add a dedicated field for the single bot configuration
-        private BotConfig _singleBotConfig;
-        // Add a field to track the single bot instance ID
-        private string _singleBotInstanceId;
 
         public MainViewModel(Action<string> logAction)
         {
@@ -40,27 +34,10 @@ namespace RadXPriceBot.ViewModels
             BotConfigs = new ObservableCollection<BotConfig>(_settings.BotConfigurations ?? new List<BotConfig>());
             BotStatuses = new ObservableCollection<BotStatusViewModel>();
 
-            // Initialize single bot config
-            _singleBotConfig = new BotConfig
+            // If no bot configs exist, create at least one default config
+            if (!BotConfigs.Any())
             {
-                Id = "single",
-                Name = "Default Bot",
-                Token = _settings.BotToken,
-                GuildId = _settings.GuildId,
-                RpcUrl = _settings.RpcUrl,
-                SwapRouterAddress = _settings.SwapRouterAddress,
-                Nickname = _settings.BotNickname,
-                StatusType = _settings.StatusType,
-                CustomStatus = _settings.CustomStatus,
-                UpdateIntervalSeconds = 30
-            };
-
-            if (!string.IsNullOrEmpty(_settings.ManualPath))
-            {
-                _singleBotConfig.Path = _settings.ManualPath
-                    .Split(',', StringSplitOptions.RemoveEmptyEntries)
-                    .Select(a => a.Trim())
-                    .ToList();
+                AddBotConfig();
             }
 
             // Subscribe to bot events
@@ -72,9 +49,7 @@ namespace RadXPriceBot.ViewModels
         private void BotManager_BotInstanceStarted(object sender, string botId)
         {
             // Find the bot config
-            var botConfig = BotConfigs.FirstOrDefault(c => c.Id == botId)
-                         ?? (_singleBotConfig.Id == botId ? _singleBotConfig : null);
-
+            var botConfig = BotConfigs.FirstOrDefault(c => c.Id == botId);
             if (botConfig == null)
                 return;
 
@@ -99,6 +74,9 @@ namespace RadXPriceBot.ViewModels
                 status.IsRunning = true;
                 status.LastUpdated = DateTime.Now.ToString("HH:mm:ss");
             }
+
+            OnPropertyChanged(nameof(IsSelectedBotRunning));
+            OnPropertyChanged(nameof(IsAnyBotRunning));
         }
 
         private void BotManager_BotInstanceStopped(object sender, string botId)
@@ -109,6 +87,9 @@ namespace RadXPriceBot.ViewModels
                 status.IsRunning = false;
                 status.LastUpdated = DateTime.Now.ToString("HH:mm:ss");
             }
+
+            OnPropertyChanged(nameof(IsSelectedBotRunning));
+            OnPropertyChanged(nameof(IsAnyBotRunning));
         }
 
         private void BotManager_BotStatusUpdated(object sender, BotStatusEventArgs e)
@@ -118,9 +99,7 @@ namespace RadXPriceBot.ViewModels
             if (status == null)
             {
                 // Get bot config to get the name
-                var botConfig = BotConfigs.FirstOrDefault(c => c.Id == e.BotId)
-                             ?? (_singleBotConfig.Id == e.BotId ? _singleBotConfig : null);
-
+                var botConfig = BotConfigs.FirstOrDefault(c => c.Id == e.BotId);
                 if (botConfig == null)
                     return;
 
@@ -156,16 +135,6 @@ namespace RadXPriceBot.ViewModels
             status.LastUpdated = DateTime.Now.ToString("HH:mm:ss");
         }
 
-
-
-        // Add SingleBotConfig property
-        public BotConfig SingleBotConfig => _singleBotConfig;
-
-        // Property to check if the single bot is running
-        public bool IsSingleBotRunning => !string.IsNullOrEmpty(_singleBotInstanceId) &&
-                                          _botManager.BotInstances?.TryGetValue(_singleBotInstanceId, out var instance) == true &&
-                                          instance.IsRunning;
-
         public ObservableCollection<PairInfo> Pairs
         {
             get => _pairs;
@@ -187,14 +156,30 @@ namespace RadXPriceBot.ViewModels
         public BotConfig SelectedBotConfig
         {
             get => _selectedBotConfig;
-            set => SetProperty(ref _selectedBotConfig, value);
+            set
+            {
+                if (SetProperty(ref _selectedBotConfig, value))
+                {
+                    // Update related properties when the selected bot changes
+                    OnPropertyChanged(nameof(IsSelectedBotRunning));
+                    OnPropertyChanged(nameof(SelectedBotStatus));
+                }
+            }
         }
+
+        public BotStatusViewModel SelectedBotStatus => _selectedBotConfig != null ?
+                                                      BotStatuses.FirstOrDefault(s => s.BotId == _selectedBotConfig.Id) :
+                                                      null;
 
         public PairInfo SelectedPair
         {
             get => _selectedPair;
             set => SetProperty(ref _selectedPair, value);
         }
+
+        // Property to check if the selected bot is running
+        public bool IsSelectedBotRunning => _selectedBotConfig != null &&
+                                          IsBotConfigRunning(_selectedBotConfig.Id);
 
         // Legacy property - use for backwards compatibility with older code
         public bool IsBotRunning => _botManager.IsRunning;
@@ -214,20 +199,25 @@ namespace RadXPriceBot.ViewModels
             return _botManager.BotInstances?.TryGetValue(configId, out var instance) == true && instance.IsRunning;
         }
 
-        // Save settings for both single bot and multi-bots
+        // Save settings for multi-bots only
         public void SaveSettings()
         {
-            // Update settings from the single bot config
-            _settings.BotToken = _singleBotConfig.Token;
-            _settings.GuildId = _singleBotConfig.GuildId;
-            _settings.RpcUrl = _singleBotConfig.RpcUrl;
-            _settings.SwapRouterAddress = _singleBotConfig.SwapRouterAddress;
-            _settings.BotNickname = _singleBotConfig.Nickname;
-            _settings.StatusType = _singleBotConfig.StatusType;
-            _settings.CustomStatus = _singleBotConfig.CustomStatus;
-            if (_singleBotConfig.Path != null && _singleBotConfig.Path.Any())
+            // Store global settings based on the first bot config if available
+            var firstConfig = BotConfigs.FirstOrDefault();
+            if (firstConfig != null)
             {
-                _settings.ManualPath = string.Join(",", _singleBotConfig.Path);
+                _settings.BotToken = firstConfig.Token;
+                _settings.GuildId = firstConfig.GuildId;
+                _settings.RpcUrl = firstConfig.RpcUrl;
+                _settings.SwapRouterAddress = firstConfig.SwapRouterAddress;
+                _settings.BotNickname = firstConfig.Nickname;
+                _settings.StatusType = firstConfig.StatusType;
+                _settings.CustomStatus = firstConfig.CustomStatus;
+
+                if (firstConfig.Path != null && firstConfig.Path.Any())
+                {
+                    _settings.ManualPath = string.Join(",", firstConfig.Path);
+                }
             }
 
             // Make a deep copy of the bot configurations to avoid reference issues
@@ -244,7 +234,7 @@ namespace RadXPriceBot.ViewModels
                 StatusType = config.StatusType,
                 CustomStatus = config.CustomStatus,
                 UpdateIntervalSeconds = config.UpdateIntervalSeconds,
-                // Add embed settings
+                // Embed settings
                 SendPeriodicEmbeds = config.SendPeriodicEmbeds,
                 EmbedIntervalMinutes = config.EmbedIntervalMinutes,
                 EmbedChannelId = config.EmbedChannelId,
@@ -252,7 +242,7 @@ namespace RadXPriceBot.ViewModels
                 IncludeChartInEmbed = config.IncludeChartInEmbed,
                 IncludeTokenInfoInEmbed = config.IncludeTokenInfoInEmbed,
                 IncludeLiquidityInfoInEmbed = config.IncludeLiquidityInfoInEmbed,
-                // Add swap settings
+                // Swap settings
                 MonitorSwapTransactions = config.MonitorSwapTransactions,
                 SwapNotificationChannelId = config.SwapNotificationChannelId,
                 SwapCheckIntervalMs = config.SwapCheckIntervalMs,
@@ -265,69 +255,6 @@ namespace RadXPriceBot.ViewModels
             SettingsService.SaveSettings(_settings);
         }
 
-
-
-
-        // Update single bot settings from UI
-        // Update single bot settings from UI with all the new parameters
-        // Update single bot settings from UI with all the new parameters
-        public void UpdateSingleBotSettings(
-            string token, string guildId, string rpcUrl,
-            string swapRouterAddress, List<string> path,
-            string nickname, string statusType, string customStatus,
-            int updateIntervalSeconds = 30,
-            // New embed parameters
-            bool sendPeriodicEmbeds = false,
-            int embedIntervalMinutes = 60,
-            string embedChannelId = "",
-            string embedColor = "#50E999",
-            bool includeChartInEmbed = true,
-            bool includeTokenInfoInEmbed = true,
-            bool includeLiquidityInfoInEmbed = true,
-            // New swap parameters
-            bool monitorSwapTransactions = true,
-            string swapNotificationChannelId = "",
-            int swapCheckIntervalMs = 15000,
-            // Additional swap parameters
-            decimal minimumBuyThresholdUsd = 0,
-            decimal minimumSellThresholdUsd = 0,
-            bool notifyOnBuys = true,
-            bool notifyOnSells = true)
-        {
-            // Update basic bot settings
-            _singleBotConfig.Token = token;
-            _singleBotConfig.GuildId = guildId;
-            _singleBotConfig.RpcUrl = rpcUrl;
-            _singleBotConfig.SwapRouterAddress = swapRouterAddress;
-            _singleBotConfig.Path = path;
-            _singleBotConfig.Nickname = nickname;
-            _singleBotConfig.StatusType = statusType;
-            _singleBotConfig.CustomStatus = customStatus;
-            _singleBotConfig.UpdateIntervalSeconds = updateIntervalSeconds;
-
-            // Update embed settings
-            _singleBotConfig.SendPeriodicEmbeds = sendPeriodicEmbeds;
-            _singleBotConfig.EmbedIntervalMinutes = embedIntervalMinutes;
-            _singleBotConfig.EmbedChannelId = embedChannelId;
-            _singleBotConfig.EmbedColor = embedColor;
-            _singleBotConfig.IncludeChartInEmbed = includeChartInEmbed;
-            _singleBotConfig.IncludeTokenInfoInEmbed = includeTokenInfoInEmbed;
-            _singleBotConfig.IncludeLiquidityInfoInEmbed = includeLiquidityInfoInEmbed;
-
-            // Update swap notification settings
-            _singleBotConfig.MonitorSwapTransactions = monitorSwapTransactions;
-            _singleBotConfig.SwapNotificationChannelId = swapNotificationChannelId;
-            _singleBotConfig.SwapCheckIntervalMs = swapCheckIntervalMs;
-            _singleBotConfig.MinimumBuyThresholdUsd = minimumBuyThresholdUsd;
-            _singleBotConfig.MinimumSellThresholdUsd = minimumSellThresholdUsd;
-            _singleBotConfig.NotifyOnBuys = notifyOnBuys;
-            _singleBotConfig.NotifyOnSells = notifyOnSells;
-
-            SaveSettings();
-        }
-
-
-
         public void UpdateBotStatus(string botId, string price, string pairName)
         {
             // Find existing status or create a new one
@@ -337,13 +264,6 @@ namespace RadXPriceBot.ViewModels
             {
                 // Find the bot config to get the name
                 var botConfig = BotConfigs.FirstOrDefault(b => b.Id == botId);
-
-                // Special case for the single bot
-                if (botId == _singleBotInstanceId && botConfig == null)
-                {
-                    botConfig = _singleBotConfig;
-                }
-
                 if (botConfig == null) return;
 
                 // Create new status view model
@@ -377,37 +297,31 @@ namespace RadXPriceBot.ViewModels
             OnPropertyChanged(nameof(BotStatuses));
         }
 
-
-        // Add this method to update swap notification settings
-        
-
-
-
-        // Add this method to MainViewModel.cs to update and save multi-bot settings
+        // Method to update and save multi-bot settings
         public void UpdateMultiBotSettings(
-     string id,
-     string name,
-     string token,
-     string guildId,
-     string rpcUrl,
-     string swapRouterAddress,
-     List<string> path,
-     string nickname,
-     string statusType,
-     string customStatus,
-     int updateIntervalSeconds,
-     // New parameters
-     bool sendPeriodicEmbeds = false,
-     int embedIntervalMinutes = 60,
-     string embedChannelId = "",
-     string embedColor = "#50E999",
-     bool includeChartInEmbed = true,
-     bool includeTokenInfoInEmbed = true,
-     bool includeLiquidityInfoInEmbed = true,
-     // Add swap parameters
-     bool monitorSwapTransactions = true,
-     string swapNotificationChannelId = "",
-     int swapCheckIntervalMs = 15000)
+         string id,
+         string name,
+         string token,
+         string guildId,
+         string rpcUrl,
+         string swapRouterAddress,
+         List<string> path,
+         string nickname,
+         string statusType,
+         string customStatus,
+         int updateIntervalSeconds,
+         // Embed parameters
+         bool sendPeriodicEmbeds = false,
+         int embedIntervalMinutes = 60,
+         string embedChannelId = "",
+         string embedColor = "#50E999",
+         bool includeChartInEmbed = true,
+         bool includeTokenInfoInEmbed = true,
+         bool includeLiquidityInfoInEmbed = true,
+         // Swap parameters
+         bool monitorSwapTransactions = true,
+         string swapNotificationChannelId = "",
+         int swapCheckIntervalMs = 30000)
         {
             var botConfig = BotConfigs.FirstOrDefault(b => b.Id == id);
             if (botConfig == null)
@@ -429,7 +343,7 @@ namespace RadXPriceBot.ViewModels
             botConfig.CustomStatus = customStatus;
             botConfig.UpdateIntervalSeconds = updateIntervalSeconds;
 
-            // New embed settings
+            // Embed settings
             botConfig.SendPeriodicEmbeds = sendPeriodicEmbeds;
             botConfig.EmbedIntervalMinutes = embedIntervalMinutes;
             botConfig.EmbedChannelId = embedChannelId;
@@ -447,9 +361,7 @@ namespace RadXPriceBot.ViewModels
             SaveSettings();
         }
 
-
-
-        // Add this method to update just the embed settings for a bot
+        // Method to update embed settings for a bot
         public void UpdateBotEmbedSettings(
             string botId,
             bool sendPeriodicEmbeds,
@@ -461,9 +373,6 @@ namespace RadXPriceBot.ViewModels
             bool includeLiquidityInfoInEmbed)
         {
             var botConfig = BotConfigs.FirstOrDefault(b => b.Id == botId);
-            if (botConfig == null && botId == "single")
-                botConfig = _singleBotConfig;
-
             if (botConfig == null)
                 return;
 
@@ -478,134 +387,47 @@ namespace RadXPriceBot.ViewModels
             // If this bot is running, update its embed settings
             if (IsBotConfigRunning(botId))
             {
+                // Pass ALL parameters to the BotManager method
                 _botManager.UpdateBotEmbedSettings(
                     botId,
                     sendPeriodicEmbeds,
                     embedIntervalMinutes,
-                    embedChannelId);
+                    embedChannelId,
+                    embedColor,
+                    includeChartInEmbed,
+                    includeTokenInfoInEmbed,
+                    includeLiquidityInfoInEmbed);
             }
 
             SaveSettings();
         }
 
-
-        // Methods specific to the single bot
-        public async Task StartSingleBotAsync()
+        // Method to update swap monitoring settings for a bot
+        public async Task UpdateBotSwapMonitoringSettings(
+            string botId,
+            bool monitorSwapTransactions,
+            string swapNotificationChannelId,
+            int swapCheckIntervalMs = 15000)
         {
-            try
+            var botConfig = BotConfigs.FirstOrDefault(b => b.Id == botId);
+            if (botConfig == null)
+                return;
+
+            botConfig.MonitorSwapTransactions = monitorSwapTransactions;
+            botConfig.SwapNotificationChannelId = swapNotificationChannelId;
+            botConfig.SwapCheckIntervalMs = swapCheckIntervalMs;
+
+            // If this bot is running, update its swap monitoring settings
+            if (IsBotConfigRunning(botId))
             {
-                // Ensure we have a path
-                if (_singleBotConfig.Path == null || !_singleBotConfig.Path.Any())
-                {
-                    // Try to use selected pair
-                    if (SelectedPair != null)
-                    {
-                        _singleBotConfig.Path = new List<string> { SelectedPair.Token0.Address, SelectedPair.Token1.Address };
-                    }
-                    else if (!string.IsNullOrEmpty(_settings.ManualPath))
-                    {
-                        _singleBotConfig.Path = _settings.ManualPath
-                            .Split(',', StringSplitOptions.RemoveEmptyEntries)
-                            .Select(a => a.Trim())
-                            .ToList();
-                    }
-                    else
-                    {
-                        throw new InvalidOperationException("No token path specified for the bot.");
-                    }
-                }
-
-                _logAction($"DEBUG: Before setting up swap monitoring settings.");
-
-                // Set swap monitoring settings before starting
-                _singleBotConfig.MonitorSwapTransactions = true; // This should be true
-                _logAction($"DEBUG: Set MonitorSwapTransactions to {_singleBotConfig.MonitorSwapTransactions}");
-
-                // Format the channel ID properly to ensure it's a valid ulong
-                string cleanChannelId = "1340394541571899576".Trim();
-                _singleBotConfig.SwapNotificationChannelId = cleanChannelId;
-                _logAction($"DEBUG: Set SwapNotificationChannelId to '{_singleBotConfig.SwapNotificationChannelId}'");
-
-                _singleBotConfig.SwapCheckIntervalMs = 15000; // 15 seconds interval
-                _logAction($"DEBUG: Set SwapCheckIntervalMs to {_singleBotConfig.SwapCheckIntervalMs}");
-
-                // Test if the channel ID can be parsed as ulong
-                if (ulong.TryParse(cleanChannelId, out ulong testChannelId))
-                {
-                    _logAction($"DEBUG: Channel ID is a valid ulong: {testChannelId}");
-                }
-                else
-                {
-                    _logAction($"ERROR: Channel ID '{cleanChannelId}' cannot be parsed as a ulong!");
-                }
-
-                // Save settings to ensure configuration is persisted
-                SaveSettings();
-                _logAction($"DEBUG: Settings saved.");
-
-                // Start the bot with the properly configured settings
-                _logAction($"DEBUG: Starting bot...");
-                _singleBotInstanceId = await _botManager.StartBotAsync(_singleBotConfig);
-                _logAction($"DEBUG: Bot started with ID: {_singleBotInstanceId}");
-
-                // Rather than directly accessing BotInstances and trying to modify the bot's state,
-                // use the proper UpdateSwapMonitoringSettings method which should handle this correctly
-                if (IsSingleBotRunning)
-                {
-                    _logAction($"DEBUG: Bot is running. Updating swap monitoring settings...");
-                    _botManager.UpdateSwapMonitoringSettings(
-                        _singleBotInstanceId,
-                        true,
-                        cleanChannelId,
-                        15000);
-                    _logAction($"DEBUG: Swap monitoring settings updated.");
-                }
-                else
-                {
-                    _logAction($"WARNING: Bot is not running after start. Cannot update swap settings.");
-                }
-
-                OnPropertyChanged(nameof(IsSingleBotRunning));
-                OnPropertyChanged(nameof(IsAnyBotRunning));
+                await _botManager.UpdateSwapMonitoringSettings(
+                    botId,
+                    monitorSwapTransactions,
+                    swapNotificationChannelId,
+                    swapCheckIntervalMs);
             }
-            catch (Exception ex)
-            {
-                _logAction($"ERROR starting bot: {ex.Message}");
-                if (ex.InnerException != null)
-                {
-                    _logAction($"Inner exception: {ex.InnerException.Message}");
-                }
-                _singleBotInstanceId = null;
-                throw;
-            }
-        }
 
-
-
-
-
-
-
-        public async Task StopSingleBotAsync()
-        {
-            if (!string.IsNullOrEmpty(_singleBotInstanceId))
-            {
-                await _botManager.StopBotAsync(_singleBotInstanceId);
-                _singleBotInstanceId = null;
-
-                OnPropertyChanged(nameof(IsSingleBotRunning));
-                OnPropertyChanged(nameof(IsAnyBotRunning));
-            }
-        }
-
-        public async Task SwitchSingleBotPairAsync(List<string> newPath, string rpcUrl, string routerAddress)
-        {
-            if (!string.IsNullOrEmpty(_singleBotInstanceId))
-            {
-                await _botManager.SwitchPairAsync(_singleBotInstanceId, newPath, rpcUrl, routerAddress);
-                // Update the path in the single bot config
-                _singleBotConfig.Path = newPath;
-            }
+            SaveSettings();
         }
 
         public async Task<PairInfo> GetPairInfoFromPathAsync(List<string> path, string rpcUrl, string routerAddress)
@@ -629,9 +451,6 @@ namespace RadXPriceBot.ViewModels
                     Token0 = token0Info,
                     Token1 = token1Info
                 };
-
-                // Since Name is a read-only property, we can't set it directly
-                // Let it be computed from the Token0 and Token1 properties
 
                 return pair;
             }
@@ -680,7 +499,6 @@ namespace RadXPriceBot.ViewModels
             SaveSettings();
         }
 
-
         public void RemoveBotConfig(BotConfig config)
         {
             // Stop the bot if running
@@ -704,31 +522,110 @@ namespace RadXPriceBot.ViewModels
             SaveSettings();
         }
 
+        // Start the selected bot
+        public async Task StartSelectedBotAsync()
+        {
+            if (_selectedBotConfig == null)
+            {
+                _logAction("No bot configuration selected.");
+                return;
+            }
+
+            try
+            {
+                // Ensure we have a path
+                if (_selectedBotConfig.Path == null || !_selectedBotConfig.Path.Any())
+                {
+                    // Try to use selected pair
+                    if (SelectedPair != null)
+                    {
+                        _selectedBotConfig.Path = new List<string> { SelectedPair.Token0.Address, SelectedPair.Token1.Address };
+                    }
+                    else if (!string.IsNullOrEmpty(_settings.ManualPath))
+                    {
+                        _selectedBotConfig.Path = _settings.ManualPath
+                            .Split(',', StringSplitOptions.RemoveEmptyEntries)
+                            .Select(a => a.Trim())
+                            .ToList();
+                    }
+                    else
+                    {
+                        throw new InvalidOperationException("No token path specified for the bot.");
+                    }
+                }
+
+                // Save settings before starting
+                SaveSettings();
+
+                // Start the bot
+                await _botManager.StartBotAsync(_selectedBotConfig);
+
+                // Update UI states
+                OnPropertyChanged(nameof(IsSelectedBotRunning));
+                OnPropertyChanged(nameof(IsAnyBotRunning));
+            }
+            catch (Exception ex)
+            {
+                _logAction($"ERROR starting bot: {ex.Message}");
+                if (ex.InnerException != null)
+                {
+                    _logAction($"Inner exception: {ex.InnerException.Message}");
+                }
+                throw;
+            }
+        }
+
+        // Stop the selected bot
+        public async Task StopSelectedBotAsync()
+        {
+            if (_selectedBotConfig == null)
+            {
+                _logAction("No bot configuration selected.");
+                return;
+            }
+
+            if (IsBotConfigRunning(_selectedBotConfig.Id))
+            {
+                await _botManager.StopBotAsync(_selectedBotConfig.Id);
+
+                // Update UI states
+                OnPropertyChanged(nameof(IsSelectedBotRunning));
+                OnPropertyChanged(nameof(IsAnyBotRunning));
+            }
+        }
+
         // Generic methods for bot management
         public async Task SwitchPairAsync(string botId, List<string> newPath, string rpcUrl, string routerAddress)
         {
             await _botManager.SwitchPairAsync(botId, newPath, rpcUrl, routerAddress);
+
+            // Update the path in the config
+            var botConfig = BotConfigs.FirstOrDefault(b => b.Id == botId);
+            if (botConfig != null)
+            {
+                botConfig.Path = newPath;
+                SaveSettings();
+            }
+
             OnPropertyChanged(nameof(IsBotRunning));
         }
 
-        // Legacy method - keep for backward compatibility
-        public async Task SwitchPairAsync(List<string> newPath, string rpcUrl, string routerAddress)
+        // Method to switch the selected bot's pair
+        public async Task SwitchSelectedBotPairAsync(List<string> newPath, string rpcUrl, string routerAddress)
         {
-            // If single bot is running, update it
-            if (IsSingleBotRunning)
+            if (_selectedBotConfig != null && IsBotConfigRunning(_selectedBotConfig.Id))
             {
-                await SwitchSingleBotPairAsync(newPath, rpcUrl, routerAddress);
+                await SwitchPairAsync(_selectedBotConfig.Id, newPath, rpcUrl, routerAddress);
+                _selectedBotConfig.Path = newPath;
+                SaveSettings();
             }
             else
             {
-                // Legacy approach
-                await _botManager.SwitchPairAsync(newPath, rpcUrl, routerAddress);
+                _logAction("No bot selected or the selected bot is not running.");
             }
-
-            OnPropertyChanged(nameof(IsBotRunning));
         }
 
-        // Add this overload method to MainViewModel.cs
+        // Start a bot with the provided configuration
         public async Task StartBotAsync(BotConfig config)
         {
             if (config == null)
@@ -755,96 +652,40 @@ namespace RadXPriceBot.ViewModels
                 }
             }
 
-            // If this is the single bot config, use the StartSingleBotAsync method
-            if (config.Id == "single")
-            {
-                await StartSingleBotAsync();
-            }
-            else
-            {
-                // Start a regular bot instance
-                await _botManager.StartBotAsync(config);
-            }
+            // Start the bot instance
+            await _botManager.StartBotAsync(config);
 
             OnPropertyChanged(nameof(IsBotRunning));
             OnPropertyChanged(nameof(IsAnyBotRunning));
         }
 
-
-        // Legacy method for starting the single bot - keep for backward compatibility
-        public async Task StartBotAsync(
-            string token, string guildId, string rpcUrl,
-            string swapRouterAddress, List<string> path,
-            string nickname, string statusType, string customStatus)
-        {
-            // Update the single bot config with default values for new parameters
-            UpdateSingleBotSettings(
-                token, guildId, rpcUrl, swapRouterAddress, path,
-                nickname, statusType, customStatus,
-                30, // Default update interval
-                false, // Default send periodic embeds
-                60, // Default embed interval (60 min)
-                "", // Default embed channel ID
-                "#50E999", // Default embed color
-                true, // Default include chart in embed
-                true, // Default include token info in embed
-                true, // Default include liquidity info in embed
-                true, // Default monitor swap transactions
-                "", // Default swap notification channel ID
-                15000, // Default swap check interval
-                0, // Default minimum buy threshold
-                0, // Default minimum sell threshold
-                true, // Default notify on buys
-                true  // Default notify on sells
-            );
-
-            // Start the single bot
-            await StartSingleBotAsync();
-
-            OnPropertyChanged(nameof(IsBotRunning));
-            OnPropertyChanged(nameof(IsAnyBotRunning));
-        }
-
-
-       
-
+        // Method to stop a bot by ID
         public async Task StopBotAsync(string botId)
         {
             await _botManager.StopBotAsync(botId);
-
-            // If this was the single bot instance, clear the ID
-            if (_singleBotInstanceId == botId)
-            {
-                _singleBotInstanceId = null;
-                OnPropertyChanged(nameof(IsSingleBotRunning));
-            }
-
             OnPropertyChanged(nameof(IsBotRunning));
             OnPropertyChanged(nameof(IsAnyBotRunning));
         }
 
-        // Legacy method - keep for backward compatibility 
-        public async Task StopBotAsync()
-        {
-            await StopSingleBotAsync();
-
-            OnPropertyChanged(nameof(IsBotRunning));
-            OnPropertyChanged(nameof(IsAnyBotRunning));
-        }
-
+        // Method to stop all bots
         public async Task StopAllBotsAsync()
         {
             await _botManager.StopAllBotsAsync();
-
-            // Reset single bot instance ID
-            _singleBotInstanceId = null;
-
             OnPropertyChanged(nameof(IsBotRunning));
-            OnPropertyChanged(nameof(IsSingleBotRunning));
             OnPropertyChanged(nameof(IsAnyBotRunning));
         }
 
-        // Data methods
+        // Method to refresh data for the selected bot
+        public async Task RefreshSelectedBotDataAsync()
+        {
+            if (_selectedBotConfig != null && IsBotConfigRunning(_selectedBotConfig.Id))
+            {
+                await _botManager.RefreshBotPriceDataAsync(_selectedBotConfig.Id);
+                _logAction($"Refreshed data for bot '{_selectedBotConfig.Name}'");
+            }
+        }
+
+        // Data loading methods
         public async Task LoadPairsAsync(string rpcUrl, string factoryAddress, Action<string> logger)
         {
             IsLoadingPairs = true;

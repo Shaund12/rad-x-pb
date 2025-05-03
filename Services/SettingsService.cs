@@ -21,7 +21,7 @@ namespace RadXPriceBot.Services
         public string CustomStatus { get; set; } = "";
         public int UpdateIntervalSeconds { get; set; } = 30;
 
-        public bool SendPeriodicEmbeds { get; set; } = false;
+        public bool SendPeriodicEmbeds { get; set; } = true;
         public int EmbedIntervalMinutes { get; set; } = 60;  // Default: once per hour
         public string EmbedChannelId { get; set; } = "";     // Discord channel ID to send embeds to
         public string EmbedColor { get; set; } = "#50E999";  // Default color in hex format
@@ -31,7 +31,7 @@ namespace RadXPriceBot.Services
         // New properties for swap monitoring
         public bool MonitorSwapTransactions { get; set; } = true;  // Enable by default
         public string SwapNotificationChannelId { get; set; } = ""; // Discord channel ID for swap notifications
-        public int SwapCheckIntervalMs { get; set; } = 15000; // Check for new transactions every 15 seconds
+        public int SwapCheckIntervalMs { get; set; } = 30000; // Check for new transactions every 15 seconds
 
         // Add these new properties for minimum thresholds
         public decimal MinimumBuyThresholdUsd { get; set; } = 10.0m; // Only notify for buys >= $10
@@ -63,7 +63,7 @@ namespace RadXPriceBot.Services
         public bool StartMinimized { get; set; } = false;
 
         // Data Settings
-        public int DefaultRefreshInterval { get; set; } = 30; // In seconds
+        public int DefaultRefreshInterval { get; set; } = 45; // In seconds
         public int DefaultChartTimeRange { get; set; } = 168; // In hours (1 week)
 
         // Notification Settings

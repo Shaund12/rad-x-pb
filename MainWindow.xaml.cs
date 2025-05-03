@@ -49,56 +49,92 @@ namespace RadXPriceBot
                         this.Height = minHeight;
                 }
             };
-
         }
 
         private void LoadSettingsToUI()
         {
             var settings = _viewModel.Settings;
 
-            BotTokenTextBox.Text = settings.BotToken;
-            GuildIdTextBox.Text = settings.GuildId;
-            RpcUrlTextBox.Text = settings.RpcUrl;
-            SwapRouterAddressTextBox.Text = settings.SwapRouterAddress;
-            FactoryAddressTextBox.Text = settings.FactoryAddress;
-            BotNicknameTextBox.Text = settings.BotNickname;
-            PathTextBox.Text = settings.ManualPath;
-
-            foreach (ComboBoxItem item in StatusTypeComboBox.Items)
+            // Load global settings to UI
+            var firstConfig = _viewModel.BotConfigs.FirstOrDefault();
+            if (firstConfig != null)
             {
-                if (item.Content.ToString() == settings.StatusType)
+                RpcUrlTextBox.Text = firstConfig.RpcUrl;
+                SwapRouterAddressTextBox.Text = firstConfig.SwapRouterAddress;
+                FactoryAddressTextBox.Text = settings.FactoryAddress;
+            }
+            else
+            {
+                RpcUrlTextBox.Text = settings.RpcUrl;
+                SwapRouterAddressTextBox.Text = settings.SwapRouterAddress;
+                FactoryAddressTextBox.Text = settings.FactoryAddress;
+            }
+
+            // Load multi-bot configuration details if a bot is selected
+            if (_viewModel.SelectedBotConfig != null)
+            {
+                UpdateMultiBotUIFromConfig(_viewModel.SelectedBotConfig);
+            }
+        }
+
+        private void UpdateMultiBotUIFromConfig(BotConfig config)
+        {
+            if (config == null) return;
+
+            // Update multi-bot tab UI elements
+            BotNameTextBox.Text = config.Name;
+            MultiTokenTextBox.Text = config.Token;
+            MultiGuildIdTextBox.Text = config.GuildId;
+            MultiRpcUrlTextBox.Text = config.RpcUrl;
+            MultiRouterTextBox.Text = config.SwapRouterAddress;
+            MultiNicknameTextBox.Text = config.Nickname;
+            UpdateIntervalTextBox.Text = config.UpdateIntervalSeconds.ToString();
+
+            // Status type selection
+            foreach (var item in MultiStatusTypeCombo.Items)
+            {
+                if (item is string statusType && statusType == config.StatusType)
                 {
-                    StatusTypeComboBox.SelectedItem = item;
+                    MultiStatusTypeCombo.SelectedItem = item;
                     break;
                 }
             }
 
+            MultiCustomStatusTextBox.Text = config.CustomStatus;
 
-            CustomStatusTextBox.Text = settings.CustomStatus;
+            // Load embed settings
+            EnablePeriodicEmbedsCheckBox.IsChecked = config.SendPeriodicEmbeds;
+            EmbedIntervalTextBox.Text = config.EmbedIntervalMinutes.ToString();
+            EmbedChannelIdTextBox.Text = config.EmbedChannelId;
+            EmbedColorTextBox.Text = config.EmbedColor;
+            IncludeChartCheckBox.IsChecked = config.IncludeChartInEmbed;
+            IncludeTokenInfoCheckBox.IsChecked = config.IncludeTokenInfoInEmbed;
+            IncludeLiquidityInfoCheckBox.IsChecked = config.IncludeLiquidityInfoInEmbed;
+
+            // Load swap monitoring settings
+            EnableSwapMonitoringCheckBox.IsChecked = config.MonitorSwapTransactions;
+            SwapChannelIdTextBox.Text = config.SwapNotificationChannelId;
+            SwapCheckIntervalTextBox.Text = config.SwapCheckIntervalMs.ToString();
         }
 
         private void SaveSettingsFromUI()
         {
+            // Only save the global settings
             var settings = _viewModel.Settings;
-
-            settings.BotToken = BotTokenTextBox.Text.Trim();
-            settings.GuildId = GuildIdTextBox.Text.Trim();
-            settings.RpcUrl = RpcUrlTextBox.Text.Trim();
-            settings.SwapRouterAddress = SwapRouterAddressTextBox.Text.Trim();
             settings.FactoryAddress = FactoryAddressTextBox.Text.Trim();
-            settings.BotNickname = BotNicknameTextBox.Text.Trim();
-            settings.ManualPath = PathTextBox.Text.Trim();
-            settings.StatusType = (StatusTypeComboBox.SelectedItem as ComboBoxItem)?.Content as string ?? "Price";
-            settings.CustomStatus = CustomStatusTextBox.Text.Trim();
+
+            // If there's a selected multi-bot config, save those settings
+            if (_viewModel.SelectedBotConfig != null)
+            {
+                SaveMultiBotSettingsFromUI();
+            }
 
             _viewModel.SaveSettings();
         }
 
-
-        private void SaveMultiBotSettings_Click(object sender, RoutedEventArgs e)
+        private void SaveMultiBotSettingsFromUI()
         {
-            if (_viewModel.SelectedBotConfig == null)
-                return;
+            if (_viewModel.SelectedBotConfig == null) return;
 
             // Get path from either selected pair or manual input
             List<string> path = null;
@@ -114,6 +150,16 @@ namespace RadXPriceBot
                     .ToList();
             }
 
+            // Parse int values with error checking
+            int updateInterval = 30;
+            int.TryParse(UpdateIntervalTextBox.Text, out updateInterval);
+
+            int embedIntervalMinutes = 60;
+            int.TryParse(EmbedIntervalTextBox.Text, out embedIntervalMinutes);
+
+            int swapCheckIntervalMs = 15000;
+            int.TryParse(SwapCheckIntervalTextBox.Text, out swapCheckIntervalMs);
+
             // Use the UpdateMultiBotSettings method to update all properties
             _viewModel.UpdateMultiBotSettings(
                 _viewModel.SelectedBotConfig.Id,
@@ -126,24 +172,41 @@ namespace RadXPriceBot
                 MultiNicknameTextBox.Text,
                 MultiStatusTypeCombo.SelectedValue as string,
                 MultiCustomStatusTextBox.Text,
-                int.Parse(UpdateIntervalTextBox.Text)
+                updateInterval,
+                // Embed parameters
+                EnablePeriodicEmbedsCheckBox.IsChecked ?? false,
+                embedIntervalMinutes,
+                EmbedChannelIdTextBox.Text,
+                EmbedColorTextBox.Text,
+                IncludeChartCheckBox.IsChecked ?? true,
+                IncludeTokenInfoCheckBox.IsChecked ?? true,
+                IncludeLiquidityInfoCheckBox.IsChecked ?? true,
+                // Swap parameters
+                EnableSwapMonitoringCheckBox.IsChecked ?? true,
+                SwapChannelIdTextBox.Text,
+                swapCheckIntervalMs
             );
+        }
 
+        private void SaveMultiBotSettings_Click(object sender, RoutedEventArgs e)
+        {
+            if (_viewModel.SelectedBotConfig == null)
+                return;
+
+            SaveMultiBotSettingsFromUI();
             AppendLog("Multi-bot settings saved.");
         }
 
-
-
-        private void StatusTypeComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        private void MultiStatusTypeCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             // Only run once XAML elements are ready
-            if (!(sender is ComboBox combo) || CustomStatusTextBox == null)
+            if (!(sender is ComboBox combo) || MultiCustomStatusTextBox == null)
                 return;
 
-            if (combo.SelectedItem is ComboBoxItem item && item.Content is string sel)
-                CustomStatusTextBox.IsEnabled = sel.Equals("Custom", StringComparison.OrdinalIgnoreCase);
+            if (combo.SelectedItem is string sel)
+                MultiCustomStatusTextBox.IsEnabled = sel.Equals("Custom", StringComparison.OrdinalIgnoreCase);
             else
-                CustomStatusTextBox.IsEnabled = false;
+                MultiCustomStatusTextBox.IsEnabled = false;
         }
 
         private async void LpPairsComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -233,21 +296,11 @@ namespace RadXPriceBot
 
                 AppendLog($"Loaded details for {pair.Name}");
 
-                // Update the selected pair in view model to make it available for both tabs
+                // Update the selected pair in view model
                 _viewModel.SelectedPair = pair;
 
-                // Check which tab is active by examining the relevant UI element
-                var tabControl = FindName("TabControl") as TabControl;
-                bool isSingleBotTabActive = tabControl == null || tabControl.SelectedIndex == 0;
-
-                // If this is from the single bot tab and the single bot is running, update it
-                if (isSingleBotTabActive && _viewModel.IsSingleBotRunning)
-                {
-                    await _viewModel.SwitchSingleBotPairAsync(path, rpcUrl, routerAddr);
-                    AppendLog($"Updated single bot to monitor {pair.Name}");
-                }
-                // If any multi-bot is selected and running, update that specific bot
-                else if (_viewModel.SelectedBotConfig != null && _viewModel.IsBotConfigRunning(_viewModel.SelectedBotConfig.Id))
+                // If a multi-bot is selected and running, update that specific bot
+                if (_viewModel.SelectedBotConfig != null && _viewModel.IsBotConfigRunning(_viewModel.SelectedBotConfig.Id))
                 {
                     await _viewModel.SwitchPairAsync(_viewModel.SelectedBotConfig.Id, path, rpcUrl, routerAddr);
                     AppendLog($"Updated multi-bot '{_viewModel.SelectedBotConfig.Name}' to monitor {pair.Name}");
@@ -264,8 +317,6 @@ namespace RadXPriceBot
                     AppendLog($"Inner exception: {ex.InnerException.Message}");
             }
         }
-
-
 
         private async void LoadPairsButton_Click(object sender, RoutedEventArgs e)
         {
@@ -309,66 +360,14 @@ namespace RadXPriceBot
             }
         }
 
-        private async void StartButton_Click(object sender, RoutedEventArgs e)
-        {
-            StartButton.IsEnabled = false;
-            AppendLog("Starting bot…");
-
-            SaveSettingsFromUI(); // Save settings before starting
-
-            var token = BotTokenTextBox.Text.Trim();
-            var guildId = GuildIdTextBox.Text.Trim();
-            var rpcUrl = RpcUrlTextBox.Text.Trim();
-            var swapRouter = SwapRouterAddressTextBox.Text.Trim();
-
-            // Decide on path
-            List<string> path;
-            if (LpPairsComboBox.SelectedItem is PairInfo p)
-            {
-                path = new List<string> { p.Token0.Address, p.Token1.Address };
-                AppendLog($"Using LP: {p.Name}");
-            }
-            else
-            {
-                path = PathTextBox.Text
-                            .Split(',', StringSplitOptions.RemoveEmptyEntries)
-                            .Select(a => a.Trim())
-                            .ToList();
-                AppendLog($"Using manual path: {string.Join(" → ", path)}");
-            }
-
-            var nickname = BotNicknameTextBox.Text.Trim();
-            var statusType = (StatusTypeComboBox.SelectedItem as ComboBoxItem)?.Content as string;
-            var customStatus = CustomStatusTextBox.Text.Trim();
-
-            // Use the new method that updates and starts the single bot
-            await _viewModel.StartBotAsync(
-                token, guildId, rpcUrl,
-                swapRouter, path,
-                nickname, statusType, customStatus);
-
-            // Update UI based on bot state
-            StartButton.IsEnabled = !_viewModel.IsSingleBotRunning;
-            StopButton.IsEnabled = _viewModel.IsSingleBotRunning;
-        }
-
-        private async void StopButton_Click(object sender, RoutedEventArgs e)
-        {
-            StopButton.IsEnabled = false;
-            AppendLog("Stopping bot…");
-
-            await _viewModel.StopSingleBotAsync();
-
-            // Update UI based on bot state
-            StartButton.IsEnabled = !_viewModel.IsSingleBotRunning;
-            StopButton.IsEnabled = _viewModel.IsSingleBotRunning;
-
-            AppendLog("Bot stopped.");
-        }
-
         private void AddBot_Click(object sender, RoutedEventArgs e)
         {
             _viewModel.AddBotConfig();
+            // Update UI with newly selected bot config
+            if (_viewModel.SelectedBotConfig != null)
+            {
+                UpdateMultiBotUIFromConfig(_viewModel.SelectedBotConfig);
+            }
         }
 
         private void RemoveBot_Click(object sender, RoutedEventArgs e)
@@ -376,6 +375,11 @@ namespace RadXPriceBot
             if (_viewModel.SelectedBotConfig != null)
             {
                 _viewModel.RemoveBotConfig(_viewModel.SelectedBotConfig);
+                // Update UI with newly selected bot config
+                if (_viewModel.SelectedBotConfig != null)
+                {
+                    UpdateMultiBotUIFromConfig(_viewModel.SelectedBotConfig);
+                }
             }
         }
 
@@ -390,6 +394,7 @@ namespace RadXPriceBot
                 };
 
                 AppendLog($"Set bot '{_viewModel.SelectedBotConfig.Name}' to monitor {_viewModel.SelectedPair.Name}");
+                _viewModel.SaveSettings();
             }
         }
 
@@ -406,6 +411,9 @@ namespace RadXPriceBot
 
             try
             {
+                // Save the current settings first
+                SaveMultiBotSettingsFromUI();
+
                 // Make sure we have a path set
                 if (_viewModel.SelectedBotConfig.Path == null || !_viewModel.SelectedBotConfig.Path.Any())
                 {
@@ -426,11 +434,11 @@ namespace RadXPriceBot
                     }
                 }
 
-                await _viewModel.StartBotAsync(_viewModel.SelectedBotConfig);
+                await _viewModel.StartSelectedBotAsync();
 
                 // Update UI
-                StartSelectedBotButton.IsEnabled = !_viewModel.IsBotConfigRunning(_viewModel.SelectedBotConfig.Id);
-                StopSelectedBotButton.IsEnabled = _viewModel.IsBotConfigRunning(_viewModel.SelectedBotConfig.Id);
+                StartSelectedBotButton.IsEnabled = !_viewModel.IsSelectedBotRunning;
+                StopSelectedBotButton.IsEnabled = _viewModel.IsSelectedBotRunning;
             }
             catch (Exception ex)
             {
@@ -438,7 +446,7 @@ namespace RadXPriceBot
             }
             finally
             {
-                StartSelectedBotButton.IsEnabled = true;
+                StartSelectedBotButton.IsEnabled = !_viewModel.IsSelectedBotRunning;
             }
         }
 
@@ -455,11 +463,11 @@ namespace RadXPriceBot
 
             try
             {
-                await _viewModel.StopBotAsync(_viewModel.SelectedBotConfig.Id);
+                await _viewModel.StopSelectedBotAsync();
 
                 // Update UI
-                StartSelectedBotButton.IsEnabled = !_viewModel.IsBotConfigRunning(_viewModel.SelectedBotConfig.Id);
-                StopSelectedBotButton.IsEnabled = _viewModel.IsBotConfigRunning(_viewModel.SelectedBotConfig.Id);
+                StartSelectedBotButton.IsEnabled = !_viewModel.IsSelectedBotRunning;
+                StopSelectedBotButton.IsEnabled = _viewModel.IsSelectedBotRunning;
 
                 AppendLog($"Bot '{_viewModel.SelectedBotConfig.Name}' stopped.");
             }
@@ -469,7 +477,7 @@ namespace RadXPriceBot
             }
             finally
             {
-                StopSelectedBotButton.IsEnabled = _viewModel.IsBotConfigRunning(_viewModel.SelectedBotConfig.Id);
+                StopSelectedBotButton.IsEnabled = _viewModel.IsSelectedBotRunning;
             }
         }
 
@@ -492,7 +500,6 @@ namespace RadXPriceBot
                 StopAllBotsButton.IsEnabled = _viewModel.IsAnyBotRunning;
             }
         }
-
 
         private void RefreshDashboard_Click(object sender, RoutedEventArgs e)
         {
@@ -627,9 +634,32 @@ namespace RadXPriceBot
             }
         }
 
+        private async void RefreshSelectedBotData_Click(object sender, RoutedEventArgs e)
+        {
+            if (_viewModel.SelectedBotConfig == null)
+            {
+                AppendLog("No bot configuration selected");
+                return;
+            }
 
+            if (!_viewModel.IsSelectedBotRunning)
+            {
+                AppendLog($"Bot '{_viewModel.SelectedBotConfig.Name}' is not running");
+                return;
+            }
 
-        // Add to MainWindow.xaml.cs
+            try
+            {
+                AppendLog($"Refreshing data for bot '{_viewModel.SelectedBotConfig.Name}'...");
+                await _viewModel.RefreshSelectedBotDataAsync();
+                AppendLog($"Data refreshed for bot '{_viewModel.SelectedBotConfig.Name}'");
+            }
+            catch (Exception ex)
+            {
+                AppendLog($"Error refreshing bot data: {ex.Message}");
+            }
+        }
+
         private void LoadDpiSettings()
         {
             double dpiScale = _viewModel.Settings.DpiScaling;
@@ -714,11 +744,6 @@ namespace RadXPriceBot
             }
         }
 
-
-
-
-        // New methods for token details and Discord integration
-
         private async void RefreshDataButton_Click(object sender, RoutedEventArgs e)
         {
             if (!(LpPairsComboBox.SelectedItem is PairInfo pair))
@@ -781,10 +806,19 @@ namespace RadXPriceBot
                 AppendLog($"Sending token information to Discord channel {channelId}...");
 
                 // Get Discord token
-                string botToken = BotTokenTextBox.Text?.Trim();
+                string botToken = "";
+                if (_viewModel.SelectedBotConfig != null)
+                {
+                    botToken = _viewModel.SelectedBotConfig.Token;
+                }
+                else if (_viewModel.BotConfigs.Any())
+                {
+                    botToken = _viewModel.BotConfigs.First().Token;
+                }
+
                 if (string.IsNullOrEmpty(botToken))
                 {
-                    AppendLog("ERROR: Bot token is not set");
+                    AppendLog("ERROR: No bot token available. Please select a bot configuration.");
                     return;
                 }
 
@@ -916,9 +950,6 @@ namespace RadXPriceBot
             return builder.Build();
         }
 
-
-
-
         // Helper method to format addresses for display
         private string FormatAddress(string address)
         {
@@ -926,6 +957,18 @@ namespace RadXPriceBot
                 return address;
 
             return $"{address.Substring(0, 6)}...{address.Substring(address.Length - 4)}";
+        }
+
+        private void BotConfigSelection_Changed(object sender, SelectionChangedEventArgs e)
+        {
+            if (sender is ComboBox comboBox && comboBox.SelectedItem is BotConfig config)
+            {
+                // Update the UI with the selected bot's configuration
+                UpdateMultiBotUIFromConfig(config);
+                // Refresh the enable/disable state of the start/stop buttons
+                StartSelectedBotButton.IsEnabled = !_viewModel.IsSelectedBotRunning;
+                StopSelectedBotButton.IsEnabled = _viewModel.IsSelectedBotRunning;
+            }
         }
 
         private void AppendLog(string message)
@@ -967,10 +1010,10 @@ namespace RadXPriceBot
         {
             SaveSettingsFromUI(); // Save settings before exiting
 
-            // Stop the bot if it's running
-            if (_viewModel.IsBotRunning)
+            // Stop all bots if any are running
+            if (_viewModel.IsAnyBotRunning)
             {
-                _viewModel.StopBotAsync().Wait();
+                _viewModel.StopAllBotsAsync().Wait();
             }
 
             Close();
@@ -1081,6 +1124,78 @@ Thanks to the Nethereum and Discord.NET teams for their excellent libraries.";
                 Owner = this
             };
             helpWindow.ShowDialog();
+        }
+
+        // Method to apply and save embed settings changes
+        private async void ApplyEmbedSettings_Click(object sender, RoutedEventArgs e)
+        {
+            if (_viewModel.SelectedBotConfig == null)
+            {
+                AppendLog("No bot configuration selected");
+                return;
+            }
+
+            try
+            {
+                // Parse values from UI
+                bool sendEmbeds = EnablePeriodicEmbedsCheckBox.IsChecked ?? false;
+                int interval = 60;
+                int.TryParse(EmbedIntervalTextBox.Text, out interval);
+                string channelId = EmbedChannelIdTextBox.Text?.Trim();
+                string embedColor = EmbedColorTextBox.Text?.Trim();
+                bool includeChart = IncludeChartCheckBox.IsChecked ?? true;
+                bool includeTokenInfo = IncludeTokenInfoCheckBox.IsChecked ?? true;
+                bool includeLiquidityInfo = IncludeLiquidityInfoCheckBox.IsChecked ?? true;
+
+                // Update the bot's embed settings
+                _viewModel.UpdateBotEmbedSettings(
+                    _viewModel.SelectedBotConfig.Id,
+                    sendEmbeds,
+                    interval,
+                    channelId,
+                    embedColor,
+                    includeChart,
+                    includeTokenInfo,
+                    includeLiquidityInfo);
+
+                AppendLog($"Applied embed settings for bot '{_viewModel.SelectedBotConfig.Name}'");
+            }
+            catch (Exception ex)
+            {
+                AppendLog($"ERROR applying embed settings: {ex.Message}");
+            }
+        }
+
+        // Method to apply and save swap monitoring settings
+        private async void ApplySwapSettings_Click(object sender, RoutedEventArgs e)
+        {
+            if (_viewModel.SelectedBotConfig == null)
+            {
+                AppendLog("No bot configuration selected");
+                return;
+            }
+
+            try
+            {
+                // Parse values from UI
+                bool monitorSwaps = EnableSwapMonitoringCheckBox.IsChecked ?? false;
+                string channelId = SwapChannelIdTextBox.Text?.Trim();
+                int interval = 15000;
+                int.TryParse(SwapCheckIntervalTextBox.Text, out interval);
+
+                // Update the bot's swap monitoring settings
+                await _viewModel.UpdateBotSwapMonitoringSettings(
+                    _viewModel.SelectedBotConfig.Id,
+                    monitorSwaps,
+                    channelId,
+                    interval);
+
+                AppendLog($"Applied swap monitoring settings for bot '{_viewModel.SelectedBotConfig.Name}'");
+            }
+            catch (Exception ex)
+            {
+                AppendLog($"ERROR applying swap monitoring settings: {ex.Message}");
+            }
         }
     }
 }

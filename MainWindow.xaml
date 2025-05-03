@@ -14,7 +14,8 @@
         <conv:BotRunningConverter x:Key="BotRunningConverter"/>
         <conv:IsCustomStatusConverter x:Key="IsCustomStatusConverter"/>
         <conv:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
-        <conv:BoolToVisibilityConverter x:Key="BoolToVisibilityConverterInverted"></conv:BoolToVisibilityConverter>
+        <conv:BoolToVisibilityConverterInverted x:Key="BoolToVisibilityConverterInverted"/>
+
 
         <!-- Expanded Color Palette -->
         <Color x:Key="HeaderBgColor">#FF191A21</Color>
@@ -584,8 +585,8 @@
                     Style="{StaticResource ModernTabControlStyle}"
                     Background="{StaticResource PanelBgBrush}">
 
-            <!-- Single Bot Tab -->
-            <TabItem Header="Single Bot" Style="{StaticResource ModernTabItemStyle}">
+            <!-- Token Explorer Tab -->
+            <TabItem Header="Token Explorer" Style="{StaticResource ModernTabItemStyle}">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                     <StackPanel Margin="5,10">
                         <!-- Connection Settings Card -->
@@ -601,25 +602,15 @@
 
                                     <!-- Left Column -->
                                     <StackPanel Grid.Column="0" Margin="0,0,8,0">
-                                        <TextBlock Text="Discord Bot Token" Style="{StaticResource LabelStyle}"/>
-                                        <TextBox x:Name="BotTokenTextBox" 
-                                                 Style="{StaticResource ModernTextBoxStyle}"
-                                                 Margin="0,0,0,12"/>
-
-                                        <TextBlock Text="Guild ID" Style="{StaticResource LabelStyle}"/>
-                                        <TextBox x:Name="GuildIdTextBox" 
+                                        <TextBlock Text="RPC Endpoint URL" Style="{StaticResource LabelStyle}"/>
+                                        <TextBox x:Name="RpcUrlTextBox" 
+                                                 Text="https://rpc.vitruveo.xyz"
                                                  Style="{StaticResource ModernTextBoxStyle}"
                                                  Margin="0,0,0,12"/>
                                     </StackPanel>
 
                                     <!-- Right Column -->
                                     <StackPanel Grid.Column="1" Margin="8,0,0,0">
-                                        <TextBlock Text="RPC Endpoint URL" Style="{StaticResource LabelStyle}"/>
-                                        <TextBox x:Name="RpcUrlTextBox" 
-                                                 Text="https://rpc.vitruveo.xyz"
-                                                 Style="{StaticResource ModernTextBoxStyle}"
-                                                 Margin="0,0,0,12"/>
-
                                         <TextBlock Text="Factory Contract Address" Style="{StaticResource LabelStyle}"/>
                                         <TextBox x:Name="FactoryAddressTextBox" 
                                                  Style="{StaticResource ModernTextBoxStyle}"
@@ -947,87 +938,6 @@
                     Margin="10,0,0,0"/>
                                                 </Grid>
 
-                                                <!-- Periodic Embed Settings -->
-                                                <Grid Margin="0,0,0,8">
-                                                    <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="Auto"/>
-                                                        <ColumnDefinition Width="*"/>
-                                                        <ColumnDefinition Width="Auto"/>
-                                                        <ColumnDefinition Width="120"/>
-                                                    </Grid.ColumnDefinitions>
-
-                                                    <CheckBox x:Name="SendPeriodicEmbedsCheckBox" 
-                     Grid.Column="0" 
-                     Content="Send Periodic Embeds" 
-                     Foreground="{StaticResource PrimaryBrush}"
-                     VerticalAlignment="Center"
-                     Margin="0,0,10,0"/>
-
-                                                    <TextBlock Grid.Column="2" Text="Interval (min):" 
-                      Style="{StaticResource LabelStyle}"
-                      VerticalAlignment="Center"
-                      Margin="10,0,8,0"/>
-
-                                                    <TextBox Grid.Column="3" x:Name="EmbedIntervalTextBox" 
-                    Style="{StaticResource ModernTextBoxStyle}"
-                    Text="60"
-                    IsEnabled="{Binding ElementName=SendPeriodicEmbedsCheckBox, Path=IsChecked}"/>
-                                                </Grid>
-
-                                                <!-- Embed Content Settings -->
-                                                <Expander Header="Embed Appearance" 
-                 Foreground="{StaticResource HighlightBrush}"
-                 Margin="0,0,0,8">
-                                                    <StackPanel Margin="0,8,0,0">
-                                                        <Grid>
-                                                            <Grid.ColumnDefinitions>
-                                                                <ColumnDefinition Width="*"/>
-                                                                <ColumnDefinition Width="*"/>
-                                                            </Grid.ColumnDefinitions>
-                                                            <Grid.RowDefinitions>
-                                                                <RowDefinition Height="Auto"/>
-                                                                <RowDefinition Height="Auto"/>
-                                                            </Grid.RowDefinitions>
-
-                                                            <CheckBox Grid.Row="0" Grid.Column="0" 
-                             x:Name="IncludeChartCheckBox" 
-                             Content="Include Chart" 
-                             Foreground="{StaticResource PrimaryBrush}"
-                             IsChecked="True"
-                             Margin="0,0,0,8"/>
-
-                                                            <CheckBox Grid.Row="0" Grid.Column="1" 
-                             x:Name="IncludeTokenInfoCheckBox" 
-                             Content="Include Token Info" 
-                             Foreground="{StaticResource PrimaryBrush}"
-                             IsChecked="True"
-                             Margin="10,0,0,8"/>
-
-                                                            <CheckBox Grid.Row="1" Grid.Column="0" 
-                             x:Name="IncludeLiquidityInfoCheckBox" 
-                             Content="Include Liquidity Info" 
-                             Foreground="{StaticResource PrimaryBrush}"
-                             IsChecked="True"/>
-
-                                                            <Grid Grid.Row="1" Grid.Column="1" Margin="10,0,0,0">
-                                                                <Grid.ColumnDefinitions>
-                                                                    <ColumnDefinition Width="Auto"/>
-                                                                    <ColumnDefinition Width="*"/>
-                                                                </Grid.ColumnDefinitions>
-
-                                                                <TextBlock Grid.Column="0" Text="Embed Color:" 
-                                  VerticalAlignment="Center"
-                                  Foreground="{StaticResource PrimaryBrush}"
-                                  Margin="0,0,8,0"/>
-
-                                                                <TextBox Grid.Column="1" x:Name="EmbedColorTextBox" 
-                                Text="#50E999" 
-                                Style="{StaticResource ModernTextBoxStyle}"/>
-                                                            </Grid>
-                                                        </Grid>
-                                                    </StackPanel>
-                                                </Expander>
-
                                                 <!-- Action Buttons -->
                                                 <Grid Grid.Row="1">
                                                     <Grid.ColumnDefinitions>
@@ -1054,83 +964,6 @@
 
                                     </StackPanel>
                                 </GroupBox>
-
-                                <!-- Manual Token Path -->
-                                <TextBlock Text="Manual Token Path (comma-separated addresses)" 
-                                           Style="{StaticResource LabelStyle}" 
-                                           Margin="0,12,0,3"
-                                           Foreground="{StaticResource OrangeBrush}"/>
-                                <TextBox x:Name="PathTextBox"
-                                         Text="0xInputToken,0xOutputToken"
-                                         Style="{StaticResource ModernTextBoxStyle}"/>
-                            </StackPanel>
-                        </Border>
-
-                        <!-- Bot Configuration Card -->
-                        <Border Style="{StaticResource CardPanelStyle}">
-                            <StackPanel>
-                                <TextBlock Text="BOT CONFIGURATION" Style="{StaticResource SectionHeaderStyle}"/>
-
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="*"/>
-                                    </Grid.ColumnDefinitions>
-
-                                    <!-- Left Column -->
-                                    <StackPanel Grid.Column="0" Margin="0,0,8,0">
-                                        <TextBlock Text="Bot Nickname" Style="{StaticResource LabelStyle}"/>
-                                        <TextBox x:Name="BotNicknameTextBox"
-                                                 Style="{StaticResource ModernTextBoxStyle}"
-                                                 Margin="0,0,0,12"/>
-                                    </StackPanel>
-
-                                    <!-- Right Column -->
-                                    <StackPanel Grid.Column="1" Margin="8,0,0,0">
-                                        <TextBlock Text="Status Type" Style="{StaticResource LabelStyle}"/>
-                                        <ComboBox x:Name="StatusTypeComboBox"
-                                                  Style="{StaticResource ModernComboBoxStyle}"
-                                                  ItemContainerStyle="{StaticResource ModernComboBoxItemStyle}"
-                                                  SelectionChanged="StatusTypeComboBox_SelectionChanged"
-                                                  Margin="0,0,0,12">
-                                            <ComboBoxItem Content="Price" IsSelected="True"/>
-                                            <ComboBoxItem Content="Reserves"/>
-                                            <ComboBoxItem Content="Market Cap"/>
-                                            <ComboBoxItem Content="Custom"/>
-                                        </ComboBox>
-                                    </StackPanel>
-                                </Grid>
-
-                                <TextBlock Text="Custom Status" Style="{StaticResource LabelStyle}"/>
-                                <TextBox x:Name="CustomStatusTextBox"
-                                         Style="{StaticResource ModernTextBoxStyle}"
-                                         IsEnabled="False"
-                                         Margin="0,0,0,12"/>
-
-                                <!-- Bot Control Buttons -->
-                                <Grid Margin="0,8,0,0">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="*"/>
-                                    </Grid.ColumnDefinitions>
-
-                                    <Button x:Name="StartButton"
-                                            Grid.Column="0"
-                                            Content="▶️ Start Bot"
-                                            Style="{StaticResource StartButtonStyle}"
-                                            Margin="0,0,6,0"
-                                            Height="40"
-                                            Click="StartButton_Click"/>
-
-                                    <Button x:Name="StopButton"
-                                            Grid.Column="1"
-                                            Content="⏹️ Stop Bot"
-                                            Style="{StaticResource StopButtonStyle}"
-                                            Margin="6,0,0,0"
-                                            Height="40"
-                                            IsEnabled="False"
-                                            Click="StopButton_Click"/>
-                                </Grid>
                             </StackPanel>
                         </Border>
 
@@ -1163,7 +996,7 @@
                 </ScrollViewer>
             </TabItem>
 
-            <!-- Bot Status Dashboard Tab (NEW) -->
+            <!-- Bot Status Dashboard Tab -->
             <TabItem Header="Bot Status" Style="{StaticResource ModernTabItemStyle}">
                 <Border Style="{StaticResource CardPanelStyle}" Margin="5,10">
                     <DockPanel>
@@ -1258,8 +1091,8 @@
                 </Border>
             </TabItem>
 
-            <!-- Multi-Bot Manager Tab -->
-            <TabItem Header="Multi-Bot Manager" Style="{StaticResource ModernTabItemStyle}">
+            <!-- Bot Manager Tab -->
+            <TabItem Header="Bot Manager" Style="{StaticResource ModernTabItemStyle}">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                     <Grid Margin="5,10">
                         <Grid.ColumnDefinitions>
@@ -1321,7 +1154,8 @@
                               ItemContainerStyle="{StaticResource ModernListViewItemStyle}"
                               BorderThickness="1"
                               ItemsSource="{Binding BotConfigs}"
-                              SelectedItem="{Binding SelectedBotConfig}">
+                              SelectedItem="{Binding SelectedBotConfig}"
+                              SelectionChanged="BotConfigSelection_Changed">
                                     <ListView.ItemTemplate>
                                         <DataTemplate>
                                             <Grid Height="32">
@@ -1398,9 +1232,8 @@
                                         <Button Grid.Column="2" 
                                     Content="🔄 Load LP Pairs"
                                     Style="{StaticResource UtilityButtonStyle}"
-                                    Width="130"
-                                    Click="LoadPairsButton_Click"
-                                    ToolTip="Load token pairs (shared with single bot tab)"/>
+                                    Width="130"                                    Click="LoadPairsButton_Click"
+                                    ToolTip="Load token pairs (shared with token explorer)"/>
                                     </Grid>
 
                                     <!-- Configuration Form -->
@@ -1498,7 +1331,8 @@
                                         <ComboBox x:Name="MultiStatusTypeCombo" Grid.Row="5" Grid.Column="1"
                                       Style="{StaticResource ModernComboBoxStyle}"
                                       ItemContainerStyle="{StaticResource ModernComboBoxItemStyle}"
-                                      SelectedValue="{Binding SelectedBotConfig.StatusType}" 
+                                      SelectedValue="{Binding SelectedBotConfig.StatusType}"
+                                      SelectionChanged="MultiStatusTypeCombo_SelectionChanged"
                                       Margin="0,0,12,12">
                                             <ComboBoxItem Content="Price"/>
                                             <ComboBoxItem Content="Reserves"/>
@@ -1539,119 +1373,197 @@
                                         Click="UseSelectedPair_Click"/>
                                         </Grid>
 
-                                        <!-- Row 7: Discord Embed Settings - IMPROVED LAYOUT -->
-                                        <TextBlock Grid.Row="7" Grid.Column="0" Text="Discord Settings:" 
+                                        <!-- Embed and Swap Settings Sections -->
+                                        <TextBlock Grid.Row="7" Grid.Column="0" Text="Advanced Settings:" 
                                        Style="{StaticResource SectionHeaderStyle}"
                                        FontSize="15"
                                        Margin="0,0,0,10"
                                        VerticalAlignment="Top"/>
 
-                                        <Border Grid.Row="7" Grid.Column="1" Grid.ColumnSpan="3" 
-                                    Background="#15FFFFFF"
-                                    BorderThickness="1"
-                                    BorderBrush="#404452"
-                                    CornerRadius="5"
-                                    Padding="15"
-                                    Margin="0,0,0,0">
-                                            <StackPanel>
-                                                <!-- Channel ID -->
-                                                <Grid Margin="0,0,0,15">
-                                                    <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="120"/>
-                                                        <ColumnDefinition Width="*"/>
-                                                    </Grid.ColumnDefinitions>
+                                        <TabControl Grid.Row="7" Grid.Column="1" Grid.ColumnSpan="3" 
+                                                   Background="Transparent" 
+                                                   BorderThickness="0">
+                                            <!-- Discord Embed Settings Tab -->
+                                            <TabItem Header="Discord Embeds">
+                                                <Border Background="#15FFFFFF"
+                                                       BorderThickness="1"
+                                                       BorderBrush="#404452"
+                                                       CornerRadius="5"
+                                                       Padding="15"
+                                                       Margin="0,5,0,0">
+                                                    <StackPanel>
+                                                        <!-- Embed Settings -->
+                                                        <Grid Margin="0,0,0,15">
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="Auto"/>
+                                                                <ColumnDefinition Width="*"/>
+                                                                <ColumnDefinition Width="Auto"/>
+                                                                <ColumnDefinition Width="100"/>
+                                                            </Grid.ColumnDefinitions>
 
-                                                    <TextBlock Grid.Column="0" Text="Channel ID:" 
-                                                  Style="{StaticResource LabelStyle}"
-                                                  VerticalAlignment="Center"/>
+                                                            <CheckBox Grid.Column="0" 
+                                                                 x:Name="EnablePeriodicEmbedsCheckBox" 
+                                                                 Content="Send Periodic Embeds" 
+                                                                 Foreground="{StaticResource PrimaryBrush}"
+                                                                 IsChecked="{Binding SelectedBotConfig.SendPeriodicEmbeds, UpdateSourceTrigger=PropertyChanged}"
+                                                                 VerticalAlignment="Center"
+                                                                 Margin="0,0,15,0"/>
 
-                                                    <TextBox Grid.Column="1"
-                                                x:Name="MultiEmbedChannelIdTextBox"
-                                                Style="{StaticResource ModernTextBoxStyle}"
-                                                Text="{Binding SelectedBotConfig.EmbedChannelId, UpdateSourceTrigger=PropertyChanged}"/>
-                                                </Grid>
+                                                            <TextBlock Grid.Column="2" Text="Interval (min):" 
+                                                                  Style="{StaticResource LabelStyle}"
+                                                                  VerticalAlignment="Center"
+                                                                  Margin="0,0,8,0"/>
 
-                                                <!-- Periodic Embeds Settings -->
-                                                <Grid Margin="0,0,0,15">
-                                                    <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="Auto"/>
-                                                        <ColumnDefinition Width="*"/>
-                                                        <ColumnDefinition Width="Auto"/>
-                                                        <ColumnDefinition Width="100"/>
-                                                    </Grid.ColumnDefinitions>
+                                                            <TextBox Grid.Column="3" 
+                                                                x:Name="EmbedIntervalTextBox" 
+                                                                Style="{StaticResource ModernTextBoxStyle}"
+                                                                Text="{Binding SelectedBotConfig.EmbedIntervalMinutes, UpdateSourceTrigger=PropertyChanged}"
+                                                                IsEnabled="{Binding ElementName=EnablePeriodicEmbedsCheckBox, Path=IsChecked}"/>
+                                                        </Grid>
 
-                                                    <CheckBox Grid.Column="0" 
-                                                 x:Name="MultiSendPeriodicEmbedsCheckBox" 
-                                                 Content="Send Periodic Embeds" 
-                                                 Foreground="{StaticResource PrimaryBrush}"
-                                                 IsChecked="{Binding SelectedBotConfig.SendPeriodicEmbeds, UpdateSourceTrigger=PropertyChanged}"
-                                                 VerticalAlignment="Center"
-                                                 Margin="0,0,15,0"/>
+                                                        <!-- Channel ID -->
+                                                        <Grid Margin="0,0,0,15">
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="120"/>
+                                                                <ColumnDefinition Width="*"/>
+                                                            </Grid.ColumnDefinitions>
 
-                                                    <TextBlock Grid.Column="2" Text="Interval (min):" 
-                                                  Style="{StaticResource LabelStyle}"
-                                                  VerticalAlignment="Center"
-                                                  Margin="0,0,8,0"/>
+                                                            <TextBlock Grid.Column="0" Text="Channel ID:" 
+                                                                  Style="{StaticResource LabelStyle}"
+                                                                  VerticalAlignment="Center"/>
 
-                                                    <TextBox Grid.Column="3" 
-                                                x:Name="MultiEmbedIntervalTextBox" 
-                                                Style="{StaticResource ModernTextBoxStyle}"
-                                                Text="{Binding SelectedBotConfig.EmbedIntervalMinutes, UpdateSourceTrigger=PropertyChanged}"
-                                                IsEnabled="{Binding ElementName=MultiSendPeriodicEmbedsCheckBox, Path=IsChecked}"/>
-                                                </Grid>
+                                                            <TextBox Grid.Column="1"
+                                                                x:Name="EmbedChannelIdTextBox"
+                                                                Style="{StaticResource ModernTextBoxStyle}"
+                                                                Text="{Binding SelectedBotConfig.EmbedChannelId, UpdateSourceTrigger=PropertyChanged}"/>
+                                                        </Grid>
 
-                                                <!-- Content Options -->
-                                                <TextBlock Text="Embed Content Options" 
-                                              Foreground="{StaticResource HighlightBrush}"
-                                              FontWeight="SemiBold"
-                                              Margin="0,0,0,10"/>
+                                                        <!-- Content Options -->
+                                                        <TextBlock Text="Embed Content Options" 
+                                                              Foreground="{StaticResource HighlightBrush}"
+                                                              FontWeight="SemiBold"
+                                                              Margin="0,0,0,10"/>
 
-                                                <Grid Margin="5,0,5,15">
-                                                    <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="*"/>
-                                                        <ColumnDefinition Width="*"/>
-                                                        <ColumnDefinition Width="*"/>
-                                                    </Grid.ColumnDefinitions>
+                                                        <Grid Margin="5,0,5,15">
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="*"/>
+                                                                <ColumnDefinition Width="*"/>
+                                                                <ColumnDefinition Width="*"/>
+                                                            </Grid.ColumnDefinitions>
 
-                                                    <CheckBox Grid.Column="0" 
-                                                 x:Name="MultiIncludeChartCheckBox" 
-                                                 Content="Include Chart" 
-                                                 Foreground="{StaticResource PrimaryBrush}"
-                                                 IsChecked="{Binding SelectedBotConfig.IncludeChartInEmbed, UpdateSourceTrigger=PropertyChanged}"
-                                                 Margin="0,0,10,0"/>
+                                                            <CheckBox Grid.Column="0" 
+                                                                 x:Name="IncludeChartCheckBox" 
+                                                                 Content="Include Chart" 
+                                                                 Foreground="{StaticResource PrimaryBrush}"
+                                                                 IsChecked="{Binding SelectedBotConfig.IncludeChartInEmbed, UpdateSourceTrigger=PropertyChanged}"
+                                                                 Margin="0,0,10,0"/>
 
-                                                    <CheckBox Grid.Column="1" 
-                                                 x:Name="MultiIncludeTokenInfoCheckBox" 
-                                                 Content="Include Token Info" 
-                                                 Foreground="{StaticResource PrimaryBrush}"
-                                                 IsChecked="{Binding SelectedBotConfig.IncludeTokenInfoInEmbed, UpdateSourceTrigger=PropertyChanged}"
-                                                 Margin="10,0,10,0"/>
+                                                            <CheckBox Grid.Column="1" 
+                                                                 x:Name="IncludeTokenInfoCheckBox" 
+                                                                 Content="Include Token Info" 
+                                                                 Foreground="{StaticResource PrimaryBrush}"
+                                                                 IsChecked="{Binding SelectedBotConfig.IncludeTokenInfoInEmbed, UpdateSourceTrigger=PropertyChanged}"
+                                                                 Margin="10,0,10,0"/>
 
-                                                    <CheckBox Grid.Column="2" 
-                                                 x:Name="MultiIncludeLiquidityInfoCheckBox" 
-                                                 Content="Include Liquidity Info" 
-                                                 Foreground="{StaticResource PrimaryBrush}"
-                                                 IsChecked="{Binding SelectedBotConfig.IncludeLiquidityInfoInEmbed, UpdateSourceTrigger=PropertyChanged}"
-                                                 Margin="10,0,0,0"/>
-                                                </Grid>
+                                                            <CheckBox Grid.Column="2" 
+                                                                 x:Name="IncludeLiquidityInfoCheckBox" 
+                                                                 Content="Include Liquidity Info" 
+                                                                 Foreground="{StaticResource PrimaryBrush}"
+                                                                 IsChecked="{Binding SelectedBotConfig.IncludeLiquidityInfoInEmbed, UpdateSourceTrigger=PropertyChanged}"
+                                                                 Margin="10,0,0,0"/>
+                                                        </Grid>
 
-                                                <!-- Embed Color -->
-                                                <Grid Margin="0,0,0,5">
-                                                    <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="120"/>
-                                                        <ColumnDefinition Width="*"/>
-                                                    </Grid.ColumnDefinitions>
+                                                        <!-- Embed Color -->
+                                                        <Grid Margin="0,0,0,12">
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="120"/>
+                                                                <ColumnDefinition Width="*"/>
+                                                            </Grid.ColumnDefinitions>
 
-                                                    <TextBlock Grid.Column="0" Text="Embed Color:" 
-                                                  Style="{StaticResource LabelStyle}"
-                                                  VerticalAlignment="Center"/>
+                                                            <TextBlock Grid.Column="0" Text="Embed Color:" 
+                                                                  Style="{StaticResource LabelStyle}"
+                                                                  VerticalAlignment="Center"/>
 
-                                                    <TextBox Grid.Column="1" x:Name="MultiEmbedColorTextBox" 
-                                                Text="{Binding SelectedBotConfig.EmbedColor, UpdateSourceTrigger=PropertyChanged}" 
-                                                Style="{StaticResource ModernTextBoxStyle}"/>
-                                                </Grid>
-                                            </StackPanel>
-                                        </Border>
+                                                            <TextBox Grid.Column="1" x:Name="EmbedColorTextBox" 
+                                                                Text="{Binding SelectedBotConfig.EmbedColor, UpdateSourceTrigger=PropertyChanged}" 
+                                                                Style="{StaticResource ModernTextBoxStyle}"/>
+                                                        </Grid>
+
+                                                        <!-- Apply Button -->
+                                                        <Button Content="Apply Embed Settings" 
+                                                           HorizontalAlignment="Right"
+                                                           Style="{StaticResource UtilityButtonStyle}"
+                                                           Width="180"
+                                                           Click="ApplyEmbedSettings_Click"/>
+                                                    </StackPanel>
+                                                </Border>
+                                            </TabItem>
+
+                                            <!-- Swap Monitoring Tab -->
+                                            <TabItem Header="Swap Monitoring">
+                                                <Border Background="#15FFFFFF"
+                                                       BorderThickness="1"
+                                                       BorderBrush="#404452"
+                                                       CornerRadius="5"
+                                                       Padding="15"
+                                                       Margin="0,5,0,0">
+                                                    <StackPanel>
+                                                        <!-- Swap Monitoring Settings -->
+                                                        <Grid Margin="0,0,0,15">
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="Auto"/>
+                                                                <ColumnDefinition Width="*"/>
+                                                                <ColumnDefinition Width="Auto"/>
+                                                                <ColumnDefinition Width="100"/>
+                                                            </Grid.ColumnDefinitions>
+
+                                                            <CheckBox Grid.Column="0" 
+                                                                 x:Name="EnableSwapMonitoringCheckBox" 
+                                                                 Content="Monitor Swap Transactions" 
+                                                                 Foreground="{StaticResource PrimaryBrush}"
+                                                                 IsChecked="{Binding SelectedBotConfig.MonitorSwapTransactions, UpdateSourceTrigger=PropertyChanged}"
+                                                                 VerticalAlignment="Center"
+                                                                 Margin="0,0,15,0"/>
+
+                                                            <TextBlock Grid.Column="2" Text="Interval (ms):" 
+                                                                  Style="{StaticResource LabelStyle}"
+                                                                  VerticalAlignment="Center"
+                                                                  Margin="0,0,8,0"/>
+
+                                                            <TextBox Grid.Column="3" 
+                                                                x:Name="SwapCheckIntervalTextBox" 
+                                                                Style="{StaticResource ModernTextBoxStyle}"
+                                                                Text="{Binding SelectedBotConfig.SwapCheckIntervalMs, UpdateSourceTrigger=PropertyChanged}"
+                                                                IsEnabled="{Binding ElementName=EnableSwapMonitoringCheckBox, Path=IsChecked}"/>
+                                                        </Grid>
+
+                                                        <!-- Swap Channel ID -->
+                                                        <Grid Margin="0,0,0,15">
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="120"/>
+                                                                <ColumnDefinition Width="*"/>
+                                                            </Grid.ColumnDefinitions>
+
+                                                            <TextBlock Grid.Column="0" Text="Channel ID:" 
+                                                                  Style="{StaticResource LabelStyle}"
+                                                                  VerticalAlignment="Center"/>
+
+                                                            <TextBox Grid.Column="1"
+                                                                x:Name="SwapChannelIdTextBox"
+                                                                Style="{StaticResource ModernTextBoxStyle}"
+                                                                Text="{Binding SelectedBotConfig.SwapNotificationChannelId, UpdateSourceTrigger=PropertyChanged}"/>
+                                                        </Grid>
+
+                                                        <!-- Apply Button -->
+                                                        <Button Content="Apply Swap Settings" 
+                                                           HorizontalAlignment="Right"
+                                                           Style="{StaticResource UtilityButtonStyle}"
+                                                           Width="180"
+                                                           Click="ApplySwapSettings_Click"/>
+                                                    </StackPanel>
+                                                </Border>
+                                            </TabItem>
+                                        </TabControl>
                                     </Grid>
                                 </StackPanel>
                             </Border>
@@ -1663,6 +1575,7 @@
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="Auto"/>
                                             <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
 
                                         <TextBlock Grid.Column="0" Text="EXECUTION LOGS" 
@@ -1672,12 +1585,18 @@
                                         <Border Grid.Column="1" 
                     Background="#30FFFFFF" 
                     Height="1" 
-                    Margin="12,0,0,0"
+                    Margin="12,0,12,0"
                     VerticalAlignment="Center"/>
+
+                                        <Button Grid.Column="2" 
+                            Content="🔄 Refresh Data" 
+                            Style="{StaticResource UtilityButtonStyle}"
+                            Click="RefreshSelectedBotData_Click" 
+                            Width="120"/>
                                     </Grid>
 
                                     <Grid>
-                                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" MaxHeight="240">
+                                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" MaxHeight="200">
                                             <TextBox x:Name="MultiLogTextBox"
                          Style="{StaticResource LogConsoleStyle}"
                          Height="Auto"
@@ -1752,7 +1671,8 @@
                     </Grid>
                 </ScrollViewer>
             </TabItem>
-
         </TabControl>
     </Grid>
 </Window>
+
+                                    

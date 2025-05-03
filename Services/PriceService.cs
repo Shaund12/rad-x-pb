@@ -417,6 +417,7 @@ namespace RadXPriceBot.Services
 
 
         // Add this method to PriceService.cs
+        // Add this method to PriceService.cs
         public async Task<List<SwapTransaction>> GetRecentSwapsAsync(int count = 10)
         {
             try
@@ -449,7 +450,7 @@ namespace RadXPriceBot.Services
                 foreach (var eventLog in logs.Take(count))
                 {
                     var data = eventLog.Event;
-                    var sender = data.Sender;
+                    var sender = data.Sender; // This is often the router address for DEX swaps
                     var to = data.To;
                     var amount0In = Web3.Convert.FromWei(data.Amount0In, token0.Decimals);
                     var amount1In = Web3.Convert.FromWei(data.Amount1In, token1.Decimals);
@@ -483,6 +484,28 @@ namespace RadXPriceBot.Services
                     if (isBuy && reserve1 > 0) priceImpact = amount1In / reserve1;
                     else if (!isBuy && reserve0 > 0) priceImpact = amount0In / reserve0;
 
+                    // Get original transaction to find the real sender (not the router)
+                    string realSender = sender;
+                    try
+                    {
+                        var tx = await _web3.Eth.Transactions.GetTransactionByHash.SendRequestAsync(eventLog.Log.TransactionHash);
+                        if (tx != null)
+                        {
+                            // Use the actual transaction sender as the FromAddress
+                            realSender = tx.From;
+                            _logger($"Found real sender for tx {eventLog.Log.TransactionHash}: {realSender} (router: {sender})");
+                        }
+                        else
+                        {
+                            _logger($"Could not find transaction with hash {eventLog.Log.TransactionHash}");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger($"Error getting transaction {eventLog.Log.TransactionHash}: {ex.Message}");
+                        // Keep using event sender as fallback
+                    }
+
                     // Get timestamp from block
                     var receipt = await _web3.Eth.Transactions
                         .GetTransactionReceipt.SendRequestAsync(eventLog.Log.TransactionHash);
@@ -493,7 +516,7 @@ namespace RadXPriceBot.Services
                     transactions.Add(new SwapTransaction
                     {
                         TransactionHash = eventLog.Log.TransactionHash,
-                        FromAddress = sender,
+                        FromAddress = realSender, // Use the real sender, not the router address
                         ToAddress = to,
                         BlockNumber = (long)eventLog.Log.BlockNumber.Value,
                         Timestamp = DateTimeOffset
@@ -523,6 +546,7 @@ namespace RadXPriceBot.Services
                 return new List<SwapTransaction>();
             }
         }
+
 
 
         private async Task<decimal?> GetTokenPairPriceAsync(string tokenA, string tokenB)

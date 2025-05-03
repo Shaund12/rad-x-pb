@@ -28,7 +28,8 @@
     <Page Remove="Resources\**" />
   </ItemGroup>
   
- 
+  <!-- Add these to your .csproj file -->
+
 
 
   <ItemGroup>
