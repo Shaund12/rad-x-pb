@@ -1,15 +1,20 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk.WindowsDesktop">
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net9.0-windows</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <UseWPF>True</UseWPF>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+
+    <!-- Tell the SDK which RIDs you plan to publish for -->
+    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
+
+    <!-- App metadata -->
     <ApplicationIcon>radxpb.ico</ApplicationIcon>
     <Title>Rad-X Price Bot</Title>
     <PackageIcon>Radxpb.png</PackageIcon>
-    <UseWindowsForms>False</UseWindowsForms>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
@@ -22,22 +27,21 @@
     <WarningLevel>1</WarningLevel>
   </PropertyGroup>
 
+  <!-- 
+    Remove manual References to WinForms/Drawing —
+    the WindowsDesktop SDK will auto-include them.
+  -->
+
   <ItemGroup>
     <Compile Remove="Resources\**" />
     <EmbeddedResource Remove="Resources\**" />
     <None Remove="Resources\**" />
     <Page Remove="Resources\**" />
   </ItemGroup>
-  
-  <!-- Add these to your .csproj file -->
-<ItemGroup>
-  <Reference Include="System.Windows.Forms" />
-  <Reference Include="System.Drawing" />
-</ItemGroup>
 
-
+  <!-- Your COM imports (tlbimp) remain if you still need them -->
   <ItemGroup>
-    <COMReference Include="{215d64d2-031c-33c7-96e3-61794cd1ee61}"> 
+    <COMReference Include="{215d64d2-031c-33c7-96e3-61794cd1ee61}">
       <WrapperTool>tlbimp</WrapperTool>
       <VersionMinor>4</VersionMinor>
       <VersionMajor>2</VersionMajor>
@@ -55,17 +59,11 @@
     <Content Include="radxpb.ico" />
   </ItemGroup>
 
-	<ItemGroup>
-		<PackageReference Include="Discord.Net" Version="3.17.4" />
-		<PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.0" />
-		<PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="8.0.0">
-			<PrivateAssets>all</PrivateAssets>
-			<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-		</PackageReference>
-		<PackageReference Include="Nethereum.Util" Version="4.29.0" />
-		<PackageReference Include="Nethereum.Web3" Version="4.29.0" />
-		<PackageReference Include="System.Data.SQLite.Core" Version="1.0.118" />
-	</ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Discord.Net" Version="3.17.4" />
+    <PackageReference Include="Nethereum.Util" Version="4.29.0" />
+    <PackageReference Include="Nethereum.Web3" Version="4.29.0" />
+  </ItemGroup>
 
   <ItemGroup>
     <None Update="ChatGPT Image Apr 29, 2025, 06_28_27 PM.png">
