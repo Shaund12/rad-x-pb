@@ -78,16 +78,20 @@ jobs:
           }
 
       # Publish your WPF app as a single-file self-contained exe
-      - name: Publish
-        run: dotnet publish ${{ env.Project_Path }} `
-            --configuration ${{ matrix.configuration }} `
-            --output publish `
-            --self-contained true `
-            -p:PublishSingleFile=true `
-            -p:IncludeNativeLibrariesForSelfExtract=true `
-            -p:PublishReadyToRun=true `
-            -p:PublishTrimmed=false `
-            -r win-x64
+      - name: Publish with MSBuild
+        run: |
+          msbuild ${{ env.Project_Path }} `
+            /t:Publish `
+            /p:Configuration=${{ matrix.configuration }} `
+            /p:Platform="Any CPU" `
+            /p:RuntimeIdentifier=win-x64 `
+            /p:SelfContained=true `
+            /p:PublishSingleFile=true `
+            /p:IncludeNativeLibrariesForSelfExtract=true `
+            /p:PublishReadyToRun=true `
+            /p:PublishTrimmed=false `
+            /p:PublishDir=publish
+
 
       # Zip up the published output
       - name: Package Application
