@@ -32,8 +32,8 @@ jobs:
     - name: Setup MSBuild
       uses: microsoft/setup-msbuild@v2
 
-    - name: Restore dependencies
-      run: dotnet restore ${{ env.Solution_Name }}
+    - name: Restore dependencies for win-x64
+      run: dotnet restore ${{ env.Solution_Name }} --runtime win-x64
 
     - name: Create Resources directory
       shell: pwsh
@@ -46,7 +46,9 @@ jobs:
       shell: pwsh
       run: |
         if (-not (Test-Path -Path "Resources\RadXLogo.png")) {
-          Invoke-WebRequest -Uri "https://raw.githubusercontent.com/microsoft/fluentui-system-icons/master/assets/Bot/SVG/ic_fluent_bot_24_regular.svg" -OutFile "Resources\RadXLogo.png"
+          Invoke-WebRequest `
+            -Uri "https://raw.githubusercontent.com/microsoft/fluentui-system-icons/master/assets/Bot/SVG/ic_fluent_bot_24_regular.svg" `
+            -OutFile "Resources\RadXLogo.png"
         }
 
     - name: Build with MSBuild
@@ -59,14 +61,24 @@ jobs:
         if ($testProjects.Count -gt 0) {
           foreach ($project in $testProjects) {
             Write-Host "Running tests for: $($project.FullName)"
-            dotnet test $project.FullName --configuration ${{ matrix.configuration }} --no-build --verbosity normal
+            dotnet test $project.FullName `
+              --configuration ${{ matrix.configuration }} --no-build --verbosity normal
           }
         } else {
           Write-Host "No test projects found."
         }
 
     - name: Publish with MSBuild
-      run: msbuild ${{ env.Project_Path }} /t:Publish /p:Configuration=${{ matrix.configuration }} /p:PublishDir=publish\ /p:SelfContained=true /p:PublishSingleFile=true /p:IncludeNativeLibrariesForSelfExtract=true /p:PublishReadyToRun=true /p:PublishTrimmed=false /p:RuntimeIdentifier=win-x64
+      run: msbuild ${{ env.Project_Path }} `
+            /t:Publish `
+            /p:Configuration=${{ matrix.configuration }} `
+            /p:PublicationDir=publish\ `
+            /p:SelfContained=true `
+            /p:PublishSingleFile=true `
+            /p:IncludeNativeLibrariesForSelfExtract=true `
+            /p:PublishReadyToRun=true `
+            /p:PublishTrimmed=false `
+            /p:RuntimeIdentifier=win-x64
 
     - name: Package Application
       run: Compress-Archive -Path publish\* -DestinationPath RadXPriceBot-${{ matrix.configuration }}.zip
