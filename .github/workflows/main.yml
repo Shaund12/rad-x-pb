@@ -11,96 +11,80 @@ on:
 
 jobs:
   build:
-    runs-on: windows-latest
-
     strategy:
       matrix:
-        configuration: [ Debug, Release ]
+        configuration: [Debug, Release]
+
+    runs-on: windows-latest
 
     env:
       Solution_Name: RadXPriceBot.sln
       Project_Path: RadXPriceBot.csproj
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
 
-      # Install the .NET 9.0 SDK (for CLI tooling)
-      - name: Install .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 9.0.x
+    # Install the .NET 9.0 SDK
+    - name: Install .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: 9.0.x
 
-      # Add the full MSBuild (Visual Studio) toolset
-      - name: Setup MSBuild
-        uses: microsoft/setup-msbuild@v2
+    # Add MSBuild to the PATH
+    - name: Setup MSBuild
+      uses: microsoft/setup-msbuild@v2
 
-      # Restore NuGet packages
-      - name: Restore dependencies
-        run: dotnet restore ${{ env.Solution_Name }}
+    # Restore NuGet packages
+    - name: Restore dependencies
+      run: dotnet restore ${{ env.Solution_Name }}
 
-      # Create Resources directory if it doesn't exist
-      - name: Create Resources directory
-        run: |
-          if (-not (Test-Path -Path "Resources")) {
-            New-Item -ItemType Directory -Path "Resources"
+    # Create Resources directory if it doesn't exist
+    - name: Create Resources directory
+      run: |
+        if (-not (Test-Path -Path "Resources")) {
+          New-Item -ItemType Directory -Path "Resources"
+        }
+
+    # Add logo if it doesn't exist - adjust this for your app's resource needs
+    - name: Add Logo Image
+      run: |
+        if (-not (Test-Path -Path "Resources\RadXLogo.png")) {
+          # Create a simple placeholder logo if the real one doesn't exist
+          # This ensures the build won't fail due to missing resources
+          Invoke-WebRequest -Uri "https://raw.githubusercontent.com/microsoft/fluentui-system-icons/master/assets/Bot/SVG/ic_fluent_bot_24_regular.svg" -OutFile "Resources\RadXLogo.png"
+        }
+
+    # Build the project
+    - name: Build
+      run: dotnet build ${{ env.Solution_Name }} --configuration ${{ matrix.configuration }} --no-restore
+
+    # Run tests if a test project exists
+    - name: Test
+      run: |
+        $testProjects = Get-ChildItem -Path "*.Tests.csproj" -Recurse
+        if ($testProjects) {
+          foreach ($project in $testProjects) {
+            dotnet test $project.FullName --configuration ${{ matrix.configuration }} --no-build --verbosity normal
           }
+        } else {
+          Write-Host "No test projects found."
+        }
 
-      # Add a placeholder logo if it's missing
-      - name: Add Logo Image
-        run: |
-          if (-not (Test-Path -Path "Resources\RadXLogo.png")) {
-            Invoke-WebRequest `
-              -Uri "https://raw.githubusercontent.com/microsoft/fluentui-system-icons/master/assets/Bot/SVG/ic_fluent_bot_24_regular.svg" `
-              -OutFile "Resources\RadXLogo.png"
-          }
+    # Publish the application
+    - name: Publish
+      run: dotnet publish ${{ env.Project_Path }} --configuration ${{ matrix.configuration }} --output publish --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:PublishReadyToRun=true -p:PublishTrimmed=false -r win-x64
 
-      # **Build with MSBuild** (full framework) so COM references resolve
-      - name: Build with MSBuild
-        run: msbuild ${{ env.Solution_Name }} /t:Build /p:Configuration=${{ matrix.configuration }} /p:Platform="Any CPU"
+    # Create ZIP package of the published files
+    - name: Package Application
+      run: Compress-Archive -Path publish\* -DestinationPath RadXPriceBot-${{ matrix.configuration }}.zip
 
-      # Run any tests
-      - name: Test
-        shell: pwsh
-        run: |
-          $testProjects = Get-ChildItem -Path "*.Tests.csproj" -Recurse
-          if ($testProjects) {
-            foreach ($project in $testProjects) {
-              dotnet test $project.FullName `
-                --configuration ${{ matrix.configuration }} `
-                --no-build `
-                --verbosity normal
-            }
-          } else {
-            Write-Host "No test projects found."
-          }
-
-      # Publish your WPF app as a single-file self-contained exe
-      - name: Publish with MSBuild
-        run: |
-          msbuild ${{ env.Project_Path }} `
-            /t:Publish `
-            /p:Configuration=${{ matrix.configuration }} `
-            /p:Platform="Any CPU" `
-            /p:RuntimeIdentifier=win-x64 `
-            /p:SelfContained=true `
-            /p:PublishSingleFile=true `
-            /p:IncludeNativeLibrariesForSelfExtract=true `
-            /p:PublishReadyToRun=true `
-            /p:PublishTrimmed=false `
-            /p:PublishDir=publish
-
-
-      # Zip up the published output
-      - name: Package Application
-        run: Compress-Archive -Path publish\* -DestinationPath RadXPriceBot-${{ matrix.configuration }}.zip
-
-      # Upload the zip as a build artifact
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: RadXPriceBot-${{ matrix.configuration }}
-          path: RadXPriceBot-${{ matrix.configuration }}.zip
-          if-no-files-found: error
+    # Upload the build artifacts
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: RadXPriceBot-${{ matrix.configuration }}
+        path: RadXPriceBot-${{ matrix.configuration }}.zip
+        if-no-files-found: error
