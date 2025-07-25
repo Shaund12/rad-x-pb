@@ -24,16 +24,42 @@ namespace RadXPriceBot
 
         public MainWindow()
         {
-            InitializeComponent();
+            try
+            {
+                InitializeComponent();
+                InitializeViewModel();
+                InitializeUI();
+            }
+            catch (Exception ex)
+            {
+                var errorMessage = $"Failed to initialize MainWindow: {ex.Message}";
+                System.Windows.MessageBox.Show(errorMessage, "Initialization Error", 
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+                AppendLog(errorMessage);
+            }
+        }
+
+        private void InitializeViewModel()
+        {
             _viewModel = new MainViewModel(AppendLog);
             DataContext = _viewModel;
+        }
 
-            // Load settings from ViewModel to UI
+        private void InitializeUI()
+        {
             LoadSettingsToUI();
-
             LoadDpiSettings();
-            // Add to MainWindow constructor after LoadDpiSettings()
-            this.SizeChanged += (s, e) =>
+            SetupWindowSizeHandling();
+        }
+
+        private void SetupWindowSizeHandling()
+        {
+            this.SizeChanged += OnWindowSizeChanged;
+        }
+
+        private void OnWindowSizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            try
             {
                 // Ensure minimum window size is respected based on current DPI scaling
                 if (_viewModel?.Settings?.DpiScaling > 1.0)
@@ -48,7 +74,11 @@ namespace RadXPriceBot
                     if (this.Height < minHeight)
                         this.Height = minHeight;
                 }
-            };
+            }
+            catch (Exception ex)
+            {
+                AppendLog($"Error handling window size change: {ex.Message}");
+            }
         }
 
         private void LoadSettingsToUI()
@@ -217,104 +247,152 @@ namespace RadXPriceBot
             try
             {
                 AppendLog($"Loading details for {pair.Name}...");
-
-                var rpcUrl = RpcUrlTextBox.Text.Trim();
-                var routerAddr = SwapRouterAddressTextBox.Text.Trim();
-
-                // Create path from the selected pair
-                var path = new List<string> { pair.Token0.Address, pair.Token1.Address };
-
-                // Get price and reserves with metrics
-                var priceSvc = new PriceService(rpcUrl, routerAddr, path, AppendLog);
-                var metrics = await priceSvc.GetTokenMetricsAsync();
-
-                // Store current metrics and pair for Discord integration
-                _currentMetrics = metrics;
-                _currentPair = pair;
-
-                // Format the display with USD values when available
-                PriceTextBlock.Text = $"{metrics["Price"]:N6} {pair.Token1.Symbol}";
-
-                // Add USD price if available
-                if (metrics.ContainsKey("PriceUsd") && metrics["PriceUsd"] > 0)
-                    PriceTextBlock.Text += $" (${metrics["PriceUsd"]:N4} USD)";
-
-                // Calculate and display the reverse price ratio
-                if (metrics["Price"] > 0)
-                {
-                    decimal reversePrice = 1 / metrics["Price"];
-                    ReversePriceTextBlock.Text = $"{reversePrice:N6} {pair.Token0.Symbol}";
-                }
-                else
-                {
-                    ReversePriceTextBlock.Text = "N/A";
-                }
-
-                // Display 24h volume if available
-                if (metrics.ContainsKey("Volume24h"))
-                {
-                    VolumeTextBlock.Text = $"${metrics["Volume24h"]:N2}";
-                }
-                else
-                {
-                    // If Volume isn't available, use an estimated value based on liquidity
-                    // This is a rough approximation - actual DEXs would use event logs for accurate volume
-                    decimal estimatedVolume = metrics["Liquidity"] * 0.1m; // Estimate volume as 10% of liquidity
-                    VolumeTextBlock.Text = $"~${estimatedVolume:N2}";
-                }
-
-                Reserve0TextBlock.Text = $"{metrics["Reserve0"]:N2} {pair.Token0.Symbol}";
-                Reserve1TextBlock.Text = $"{metrics["Reserve1"]:N2} {pair.Token1.Symbol}";
-                LiquidityTextBlock.Text = $"${metrics["Liquidity"]:N2}";
-                MarketCapTextBlock.Text = $"${metrics["MarketCap"]:N2}";
-
-                // Update additional token info fields if they exist
-                if (TotalSupplyTextBlock != null && metrics.ContainsKey("TotalSupply"))
-                    TotalSupplyTextBlock.Text = $"{metrics["TotalSupply"]:N0} {pair.Token0.Symbol}";
-
-                if (CirculatingSupplyTextBlock != null && metrics.ContainsKey("CirculatingSupply"))
-                    CirculatingSupplyTextBlock.Text = $"{metrics["CirculatingSupply"]:N0} {pair.Token0.Symbol}";
-
-                if (HolderCountTextBlock != null && metrics.ContainsKey("HolderCount"))
-                    HolderCountTextBlock.Text = $"{metrics["HolderCount"]:N0}";
-
-                if (Reserve0UsdTextBlock != null && metrics.ContainsKey("Reserve0Usd"))
-                    Reserve0UsdTextBlock.Text = $"${metrics["Reserve0Usd"]:N2}";
-
-                if (Reserve1UsdTextBlock != null && metrics.ContainsKey("Reserve1Usd"))
-                    Reserve1UsdTextBlock.Text = $"${metrics["Reserve1Usd"]:N2}";
-
-                // Update token address fields
-                if (Token0AddressTextBlock != null)
-                    Token0AddressTextBlock.Text = FormatAddress(pair.Token0.Address);
-
-                if (Token1AddressTextBlock != null)
-                    Token1AddressTextBlock.Text = FormatAddress(pair.Token1.Address);
-
-                if (PairAddressTextBlock != null)
-                    PairAddressTextBlock.Text = FormatAddress(pair.Address);
-
+                await LoadPairDetailsAsync(pair);
                 AppendLog($"Loaded details for {pair.Name}");
-
-                // Update the selected pair in view model
-                _viewModel.SelectedPair = pair;
-
-                // If a multi-bot is selected and running, update that specific bot
-                if (_viewModel.SelectedBotConfig != null && _viewModel.IsBotConfigRunning(_viewModel.SelectedBotConfig.Id))
-                {
-                    await _viewModel.SwitchPairAsync(_viewModel.SelectedBotConfig.Id, path, rpcUrl, routerAddr);
-                    AppendLog($"Updated multi-bot '{_viewModel.SelectedBotConfig.Name}' to monitor {pair.Name}");
-
-                    // Also update the path in the config
-                    _viewModel.SelectedBotConfig.Path = path;
-                    _viewModel.SaveSettings();
-                }
             }
             catch (Exception ex)
             {
                 AppendLog($"ERROR loading pair details: {ex.Message}");
                 if (ex.InnerException != null)
                     AppendLog($"Inner exception: {ex.InnerException.Message}");
+            }
+        }
+
+        private async Task LoadPairDetailsAsync(PairInfo pair)
+        {
+            var rpcUrl = RpcUrlTextBox?.Text?.Trim();
+            var routerAddr = SwapRouterAddressTextBox?.Text?.Trim();
+
+            if (string.IsNullOrEmpty(rpcUrl) || string.IsNullOrEmpty(routerAddr))
+            {
+                throw new InvalidOperationException("RPC URL and Router Address must be specified");
+            }
+
+            // Create path from the selected pair
+            var path = new List<string> { pair.Token0.Address, pair.Token1.Address };
+
+            // Get price and reserves with metrics
+            var priceSvc = new PriceService(rpcUrl, routerAddr, path, AppendLog);
+            var metrics = await priceSvc.GetTokenMetricsAsync();
+
+            // Store current metrics and pair for Discord integration
+            _currentMetrics = metrics;
+            _currentPair = pair;
+
+            // Update UI with the loaded metrics
+            UpdatePairMetricsUI(pair, metrics);
+
+            // Update the selected pair in view model
+            _viewModel.SelectedPair = pair;
+
+            // Update running bot if applicable
+            await UpdateRunningBotIfNeeded(pair, path, rpcUrl, routerAddr);
+        }
+
+        private void UpdatePairMetricsUI(PairInfo pair, Dictionary<string, decimal> metrics)
+        {
+            if (pair == null || metrics == null) return;
+
+            // Format the display with USD values when available
+            PriceTextBlock.Text = $"{metrics["Price"]:N6} {pair.Token1.Symbol}";
+
+            // Add USD price if available
+            if (metrics.ContainsKey("PriceUsd") && metrics["PriceUsd"] > 0)
+                PriceTextBlock.Text += $" (${metrics["PriceUsd"]:N4} USD)";
+
+            // Calculate and display the reverse price ratio
+            UpdateReversePriceDisplay(pair, metrics);
+
+            // Display volume information
+            UpdateVolumeDisplay(metrics);
+
+            // Update reserves and liquidity
+            UpdateReservesAndLiquidityDisplay(pair, metrics);
+
+            // Update additional token information
+            UpdateAdditionalTokenInfo(pair, metrics);
+
+            // Update token addresses
+            UpdateTokenAddressesDisplay(pair);
+        }
+
+        private void UpdateReversePriceDisplay(PairInfo pair, Dictionary<string, decimal> metrics)
+        {
+            if (metrics["Price"] > 0)
+            {
+                decimal reversePrice = 1 / metrics["Price"];
+                ReversePriceTextBlock.Text = $"{reversePrice:N6} {pair.Token0.Symbol}";
+            }
+            else
+            {
+                ReversePriceTextBlock.Text = "N/A";
+            }
+        }
+
+        private void UpdateVolumeDisplay(Dictionary<string, decimal> metrics)
+        {
+            if (metrics.ContainsKey("Volume24h"))
+            {
+                VolumeTextBlock.Text = $"${metrics["Volume24h"]:N2}";
+            }
+            else
+            {
+                // Estimate volume as 10% of liquidity if not available
+                decimal estimatedVolume = metrics["Liquidity"] * 0.1m;
+                VolumeTextBlock.Text = $"~${estimatedVolume:N2}";
+            }
+        }
+
+        private void UpdateReservesAndLiquidityDisplay(PairInfo pair, Dictionary<string, decimal> metrics)
+        {
+            Reserve0TextBlock.Text = $"{metrics["Reserve0"]:N2} {pair.Token0.Symbol}";
+            Reserve1TextBlock.Text = $"{metrics["Reserve1"]:N2} {pair.Token1.Symbol}";
+            LiquidityTextBlock.Text = $"${metrics["Liquidity"]:N2}";
+            MarketCapTextBlock.Text = $"${metrics["MarketCap"]:N2}";
+        }
+
+        private void UpdateAdditionalTokenInfo(PairInfo pair, Dictionary<string, decimal> metrics)
+        {
+            // Update additional token info fields if they exist
+            if (TotalSupplyTextBlock != null && metrics.ContainsKey("TotalSupply"))
+                TotalSupplyTextBlock.Text = $"{metrics["TotalSupply"]:N0} {pair.Token0.Symbol}";
+
+            if (CirculatingSupplyTextBlock != null && metrics.ContainsKey("CirculatingSupply"))
+                CirculatingSupplyTextBlock.Text = $"{metrics["CirculatingSupply"]:N0} {pair.Token0.Symbol}";
+
+            if (HolderCountTextBlock != null && metrics.ContainsKey("HolderCount"))
+                HolderCountTextBlock.Text = $"{metrics["HolderCount"]:N0}";
+
+            if (Reserve0UsdTextBlock != null && metrics.ContainsKey("Reserve0Usd"))
+                Reserve0UsdTextBlock.Text = $"${metrics["Reserve0Usd"]:N2}";
+
+            if (Reserve1UsdTextBlock != null && metrics.ContainsKey("Reserve1Usd"))
+                Reserve1UsdTextBlock.Text = $"${metrics["Reserve1Usd"]:N2}";
+        }
+
+        private void UpdateTokenAddressesDisplay(PairInfo pair)
+        {
+            if (Token0AddressTextBlock != null)
+                Token0AddressTextBlock.Text = FormatAddress(pair.Token0.Address);
+
+            if (Token1AddressTextBlock != null)
+                Token1AddressTextBlock.Text = FormatAddress(pair.Token1.Address);
+
+            if (PairAddressTextBlock != null)
+                PairAddressTextBlock.Text = FormatAddress(pair.Address);
+        }
+
+        private async Task UpdateRunningBotIfNeeded(PairInfo pair, List<string> path, string rpcUrl, string routerAddr)
+        {
+            // If a multi-bot is selected and running, update that specific bot
+            if (_viewModel.SelectedBotConfig != null && _viewModel.IsBotConfigRunning(_viewModel.SelectedBotConfig.Id))
+            {
+                await _viewModel.SwitchPairAsync(_viewModel.SelectedBotConfig.Id, path, rpcUrl, routerAddr);
+                AppendLog($"Updated multi-bot '{_viewModel.SelectedBotConfig.Name}' to monitor {pair.Name}");
+
+                // Also update the path in the config
+                _viewModel.SelectedBotConfig.Path = path;
+                _viewModel.SaveSettings();
             }
         }
 
@@ -799,95 +877,130 @@ namespace RadXPriceBot
 
             try
             {
-                string channelIdText = DiscordChannelIdTextBox?.Text?.Trim();
-                if (string.IsNullOrEmpty(channelIdText))
-                {
-                    AppendLog("ERROR: Please enter a Discord channel ID");
-                    return;
-                }
-
-                if (!ulong.TryParse(channelIdText, out ulong channelId))
-                {
-                    AppendLog("ERROR: Invalid Discord channel ID format");
-                    return;
-                }
-
+                var channelId = await ValidateDiscordChannelInput();
+                var botToken = GetAvailableBotToken();
+                
                 AppendLog($"Sending token information to Discord channel {channelId}...");
-
-                // Get Discord token
-                string botToken = "";
-                if (_viewModel.SelectedBotConfig != null)
-                {
-                    botToken = _viewModel.SelectedBotConfig.Token;
-                }
-                else if (_viewModel.BotConfigs.Any())
-                {
-                    botToken = _viewModel.BotConfigs.First().Token;
-                }
-
-                if (string.IsNullOrEmpty(botToken))
-                {
-                    AppendLog("ERROR: No bot token available. Please select a bot configuration.");
-                    return;
-                }
-
-                // Create Discord client with appropriate configuration
-                var config = new DiscordSocketConfig
-                {
-                    GatewayIntents = GatewayIntents.AllUnprivileged
-                };
-
-                var discordClient = new DiscordSocketClient(config);
-
-                try
-                {
-                    await discordClient.LoginAsync(TokenType.Bot, botToken);
-                    await discordClient.StartAsync();
-
-                    // Wait for connection
-                    int connectionAttempts = 0;
-                    while (discordClient.ConnectionState != ConnectionState.Connected && connectionAttempts < 10)
-                    {
-                        await Task.Delay(1000);
-                        connectionAttempts++;
-                    }
-
-                    if (discordClient.ConnectionState != ConnectionState.Connected)
-                    {
-                        AppendLog("ERROR: Failed to connect to Discord");
-                        return;
-                    }
-
-                    // Find channel and send message
-                    var channel = await discordClient.GetChannelAsync(channelId) as IMessageChannel;
-                    if (channel == null)
-                    {
-                        AppendLog($"ERROR: Could not find Discord channel with ID {channelId}");
-                        return;
-                    }
-
-                    // Create rich embed
-                    var embed = CreateTokenEmbed(_currentPair, _currentMetrics);
-
-                    // Send message with embed
-                    await channel.SendMessageAsync(
-                        text: $"**{_currentPair.Token0.Symbol}/{_currentPair.Token1.Symbol} Token Information**",
-                        embed: embed);
-
-                    AppendLog("Successfully sent token details to Discord!");
-                }
-                finally
-                {
-                    // Ensure we always disconnect properly
-                    await discordClient.StopAsync();
-                    await discordClient.DisposeAsync();
-                }
+                
+                await SendDiscordMessageAsync(botToken, channelId);
+                AppendLog("Successfully sent token details to Discord!");
             }
             catch (Exception ex)
             {
                 AppendLog($"ERROR sending to Discord: {ex.Message}");
                 if (ex.InnerException != null)
                     AppendLog($"Inner exception: {ex.InnerException.Message}");
+            }
+        }
+
+        private async Task<ulong> ValidateDiscordChannelInput()
+        {
+            string channelIdText = DiscordChannelIdTextBox?.Text?.Trim();
+            if (string.IsNullOrEmpty(channelIdText))
+            {
+                throw new InvalidOperationException("Please enter a Discord channel ID");
+            }
+
+            if (!ulong.TryParse(channelIdText, out ulong channelId))
+            {
+                throw new FormatException("Invalid Discord channel ID format");
+            }
+
+            return channelId;
+        }
+
+        private string GetAvailableBotToken()
+        {
+            string botToken = "";
+            if (_viewModel.SelectedBotConfig != null)
+            {
+                botToken = _viewModel.SelectedBotConfig.Token;
+            }
+            else if (_viewModel.BotConfigs.Any())
+            {
+                botToken = _viewModel.BotConfigs.First().Token;
+            }
+
+            if (string.IsNullOrEmpty(botToken))
+            {
+                throw new InvalidOperationException("No bot token available. Please select a bot configuration.");
+            }
+
+            return botToken;
+        }
+
+        private async Task SendDiscordMessageAsync(string botToken, ulong channelId)
+        {
+            // Create Discord client with appropriate configuration
+            var config = new DiscordSocketConfig
+            {
+                GatewayIntents = GatewayIntents.AllUnprivileged
+            };
+
+            using var discordClient = new DiscordSocketClient(config);
+            
+            try
+            {
+                await EstablishDiscordConnection(discordClient, botToken);
+                await SendTokenEmbedToChannel(discordClient, channelId);
+            }
+            finally
+            {
+                await SafelyDisconnectDiscord(discordClient);
+            }
+        }
+
+        private async Task EstablishDiscordConnection(DiscordSocketClient client, string botToken)
+        {
+            await client.LoginAsync(TokenType.Bot, botToken);
+            await client.StartAsync();
+
+            // Wait for connection with timeout
+            int connectionAttempts = 0;
+            const int maxAttempts = 10;
+            
+            while (client.ConnectionState != ConnectionState.Connected && connectionAttempts < maxAttempts)
+            {
+                await Task.Delay(1000);
+                connectionAttempts++;
+            }
+
+            if (client.ConnectionState != ConnectionState.Connected)
+            {
+                throw new TimeoutException("Failed to connect to Discord within timeout period");
+            }
+        }
+
+        private async Task SendTokenEmbedToChannel(DiscordSocketClient client, ulong channelId)
+        {
+            var channel = await client.GetChannelAsync(channelId) as IMessageChannel;
+            if (channel == null)
+            {
+                throw new InvalidOperationException($"Could not find Discord channel with ID {channelId}");
+            }
+
+            // Create rich embed
+            var embed = CreateTokenEmbed(_currentPair, _currentMetrics);
+
+            // Send message with embed
+            await channel.SendMessageAsync(
+                text: $"**{_currentPair.Token0.Symbol}/{_currentPair.Token1.Symbol} Token Information**",
+                embed: embed);
+        }
+
+        private async Task SafelyDisconnectDiscord(DiscordSocketClient client)
+        {
+            try
+            {
+                if (client != null)
+                {
+                    await client.StopAsync();
+                    await client.DisposeAsync();
+                }
+            }
+            catch (Exception ex)
+            {
+                AppendLog($"Warning: Error during Discord disconnect: {ex.Message}");
             }
         }
 

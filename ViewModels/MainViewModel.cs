@@ -28,25 +28,57 @@ namespace RadXPriceBot.ViewModels
 
         public MainViewModel(Action<string> logAction)
         {
-            _logAction = logAction;
-            _botManager = new BotManager(logAction);
-            _settings = SettingsService.LoadSettings();
+            _logAction = logAction ?? throw new ArgumentNullException(nameof(logAction));
+            
+            try
+            {
+                InitializeServices();
+                InitializeSettings();
+                InitializeCollections();
+                InitializeBotManager();
+                EnsureAtLeastOneBotConfig();
+            }
+            catch (Exception ex)
+            {
+                _logAction($"ERROR initializing MainViewModel: {ex.Message}");
+                throw;
+            }
+        }
 
-            // Initialize collections
+        private void InitializeServices()
+        {
+            _databaseService = new DatabaseService(_logAction);
+        }
+
+        private void InitializeSettings()
+        {
+            _settings = SettingsService.LoadSettings() ?? new BotSettings();
+        }
+
+        private void InitializeCollections()
+        {
             Pairs = new ObservableCollection<PairInfo>();
             BotConfigs = new ObservableCollection<BotConfig>(_settings.BotConfigurations ?? new List<BotConfig>());
             BotStatuses = new ObservableCollection<BotStatusViewModel>();
+        }
 
+        private void InitializeBotManager()
+        {
+            _botManager = new BotManager(_logAction);
+            
+            // Subscribe to bot events
+            _botManager.BotInstanceStarted += BotManager_BotInstanceStarted;
+            _botManager.BotInstanceStopped += BotManager_BotInstanceStopped;
+            _botManager.BotStatusUpdated += BotManager_BotStatusUpdated;
+        }
+
+        private void EnsureAtLeastOneBotConfig()
+        {
             // If no bot configs exist, create at least one default config
             if (!BotConfigs.Any())
             {
                 AddBotConfig();
             }
-
-            // Subscribe to bot events
-            _botManager.BotInstanceStarted += BotManager_BotInstanceStarted;
-            _botManager.BotInstanceStopped += BotManager_BotInstanceStopped;
-            _botManager.BotStatusUpdated += BotManager_BotStatusUpdated;
         }
 
         private void BotManager_BotInstanceStarted(object sender, string botId)
@@ -98,28 +130,47 @@ namespace RadXPriceBot.ViewModels
 
         private void BotManager_BotStatusUpdated(object sender, BotStatusEventArgs e)
         {
+            if (e == null) return;
+
             // Find the status for this bot
             var status = BotStatuses.FirstOrDefault(s => s.BotId == e.BotId);
             if (status == null)
             {
-                // Get bot config to get the name
-                var botConfig = BotConfigs.FirstOrDefault(c => c.Id == e.BotId);
-                if (botConfig == null)
-                    return;
-
-                // Create a new status with DatabaseService
-                status = new BotStatusViewModel(_databaseService)
-                {
-                    BotId = e.BotId,
-                    BotName = botConfig.Name,
-                    IsRunning = true,
-                    LastUpdated = DateTime.Now.ToString("HH:mm:ss")
-                };
-
-                // Add to collection
-                Application.Current.Dispatcher.Invoke(() => BotStatuses.Add(status));
+                status = CreateNewBotStatus(e.BotId);
+                if (status == null) return; // Could not create status
             }
 
+            UpdateBotStatusWithEventData(status, e);
+        }
+
+        private BotStatusViewModel CreateNewBotStatus(string botId)
+        {
+            // Get bot config to get the name
+            var botConfig = BotConfigs.FirstOrDefault(c => c.Id == botId);
+            if (botConfig == null)
+            {
+                _logAction($"Warning: Could not find bot config for ID {botId}");
+                return null;
+            }
+
+            // Create a new status with DatabaseService (safely handle null)
+            var status = _databaseService != null 
+                ? new BotStatusViewModel(_databaseService)
+                : new BotStatusViewModel();
+
+            status.BotId = botId;
+            status.BotName = botConfig.Name;
+            status.IsRunning = true;
+            status.LastUpdated = DateTime.Now.ToString("HH:mm:ss");
+
+            // Add to collection on UI thread
+            Application.Current?.Dispatcher?.Invoke(() => BotStatuses.Add(status));
+            
+            return status;
+        }
+
+        private void UpdateBotStatusWithEventData(BotStatusViewModel status, BotStatusEventArgs e)
+        {
             // Update status information
             if (e.PairInfo != null)
             {
@@ -129,86 +180,82 @@ namespace RadXPriceBot.ViewModels
 
             if (e.Metrics != null)
             {
-                // Update simple price information
-                if (e.Metrics.ContainsKey("Price") && e.PairInfo != null)
-                {
-                    string priceText = $"{e.Metrics["Price"]:N6} {e.PairInfo.Token1.Symbol}";
-                    if (e.Metrics.ContainsKey("PriceUsd") && e.Metrics["PriceUsd"] > 0)
-                        priceText += $" (${e.Metrics["PriceUsd"]:N4})";
-
-                    status.CurrentPrice = priceText;
-                }
-
-                // Update 24-hour volume
-                if (e.Metrics.ContainsKey("Volume24h"))
-                {
-                    string volumeText = FormatLargeNumber(e.Metrics["Volume24h"]);
-                    status.Volume24h = volumeText;
-                }
-
-                // Update price changes at different time intervals if available
-                if (e.Metrics.ContainsKey("PriceChange15m"))
-                {
-                    decimal change = e.Metrics["PriceChange15m"];
-                    status.PriceChange15Min = change >= 0 ? $"+{change:N2}%" : $"{change:N2}%";
-                }
-
-                if (e.Metrics.ContainsKey("PriceChange30m"))
-                {
-                    decimal change = e.Metrics["PriceChange30m"];
-                    status.PriceChange30Min = change >= 0 ? $"+{change:N2}%" : $"{change:N2}%";
-                }
-
-                if (e.Metrics.ContainsKey("PriceChange1h"))
-                {
-                    decimal change = e.Metrics["PriceChange1h"];
-                    status.PriceChange1Hour = change >= 0 ? $"+{change:N2}%" : $"{change:N2}%";
-                }
-
-                if (e.Metrics.ContainsKey("PriceChange4h"))
-                {
-                    decimal change = e.Metrics["PriceChange4h"];
-                    status.PriceChange4Hour = change >= 0 ? $"+{change:N2}%" : $"{change:N2}%";
-                }
-
-                // Update 24-hour price change if available
-                if (e.Metrics.ContainsKey("PriceChange24h"))
-                {
-                    decimal change = e.Metrics["PriceChange24h"];
-                    status.PriceChange24h = change >= 0 ? $"+{change:N2}%" : $"{change:N2}%";
-                }
-
-                // Update 7-day price change if available
-                if (e.Metrics.ContainsKey("PriceChange7d"))
-                {
-                    decimal change = e.Metrics["PriceChange7d"];
-                    status.PriceChange7d = change >= 0 ? $"+{change:N2}%" : $"{change:N2}%";
-                }
-
-                // Update liquidity change if available
-                if (e.Metrics.ContainsKey("LiquidityChange24h"))
-                {
-                    decimal change = e.Metrics["LiquidityChange24h"];
-                    status.LiquidityChange24h = change >= 0 ? $"+{change:N2}%" : $"{change:N2}%";
-                }
-
-                // Update current liquidity
-                if (e.Metrics.ContainsKey("Liquidity"))
-                {
-                    status.CurrentLiquidity = e.Metrics["Liquidity"];
-                }
-
-                // Update holder count if available
-                if (e.Metrics.ContainsKey("HolderCount"))
-                {
-                    status.HoldersCount = (int)e.Metrics["HolderCount"];
-                }
+                UpdateStatusMetrics(status, e.Metrics, e.PairInfo);
             }
 
             status.LastUpdated = DateTime.Now.ToString("HH:mm:ss");
 
             // Force a refresh of the historical data
             status.ResetHistoricalDataState();
+        }
+
+        private void UpdateStatusMetrics(BotStatusViewModel status, Dictionary<string, decimal> metrics, PairInfo pairInfo)
+        {
+            // Update simple price information
+            if (metrics.ContainsKey("Price") && pairInfo != null)
+            {
+                string priceText = $"{metrics["Price"]:N6} {pairInfo.Token1.Symbol}";
+                if (metrics.ContainsKey("PriceUsd") && metrics["PriceUsd"] > 0)
+                    priceText += $" (${metrics["PriceUsd"]:N4})";
+
+                status.CurrentPrice = priceText;
+            }
+
+            // Update volume
+            if (metrics.ContainsKey("Volume24h"))
+            {
+                status.Volume24h = FormatLargeNumber(metrics["Volume24h"]);
+            }
+
+            // Update price changes for various intervals
+            UpdatePriceChanges(status, metrics);
+
+            // Update liquidity information
+            UpdateLiquidityInfo(status, metrics);
+        }
+
+        private void UpdatePriceChanges(BotStatusViewModel status, Dictionary<string, decimal> metrics)
+        {
+            var priceChangeKeys = new[]
+            {
+                ("PriceChange15m", (Action<string>)(value => status.PriceChange15Min = value)),
+                ("PriceChange30m", (Action<string>)(value => status.PriceChange30Min = value)),
+                ("PriceChange1h", (Action<string>)(value => status.PriceChange1Hour = value)),
+                ("PriceChange4h", (Action<string>)(value => status.PriceChange4Hour = value)),
+                ("PriceChange24h", (Action<string>)(value => status.PriceChange24h = value)),
+                ("PriceChange7d", (Action<string>)(value => status.PriceChange7d = value))
+            };
+
+            foreach (var (key, setter) in priceChangeKeys)
+            {
+                if (metrics.ContainsKey(key))
+                {
+                    decimal change = metrics[key];
+                    setter(change >= 0 ? $"+{change:N2}%" : $"{change:N2}%");
+                }
+            }
+        }
+
+        private void UpdateLiquidityInfo(BotStatusViewModel status, Dictionary<string, decimal> metrics)
+        {
+            // Update liquidity change if available
+            if (metrics.ContainsKey("LiquidityChange24h"))
+            {
+                decimal change = metrics["LiquidityChange24h"];
+                status.LiquidityChange24h = change >= 0 ? $"+{change:N2}%" : $"{change:N2}%";
+            }
+
+            // Update current liquidity
+            if (metrics.ContainsKey("Liquidity"))
+            {
+                status.CurrentLiquidity = metrics["Liquidity"];
+            }
+
+            // Update holder count if available
+            if (metrics.ContainsKey("HolderCount"))
+            {
+                status.HoldersCount = (int)metrics["HolderCount"];
+            }
         }
 
 
