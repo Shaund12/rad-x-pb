@@ -448,15 +448,22 @@ namespace RadXPriceBot
             }
         }
 
-        private void RemoveBot_Click(object sender, RoutedEventArgs e)
+        private async void RemoveBot_Click(object sender, RoutedEventArgs e)
         {
             if (_viewModel.SelectedBotConfig != null)
             {
-                _viewModel.RemoveBotConfig(_viewModel.SelectedBotConfig);
-                // Update UI with newly selected bot config
-                if (_viewModel.SelectedBotConfig != null)
+                try
                 {
-                    UpdateMultiBotUIFromConfig(_viewModel.SelectedBotConfig);
+                    await _viewModel.RemoveBotConfigAsync(_viewModel.SelectedBotConfig);
+                    // Update UI with newly selected bot config
+                    if (_viewModel.SelectedBotConfig != null)
+                    {
+                        UpdateMultiBotUIFromConfig(_viewModel.SelectedBotConfig);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    AppendLog($"Error removing bot configuration: {ex.Message}");
                 }
             }
         }
@@ -1128,17 +1135,28 @@ namespace RadXPriceBot
             }
         }
 
-        private void MenuItem_Exit_Click(object sender, RoutedEventArgs e)
+        private async void MenuItem_Exit_Click(object sender, RoutedEventArgs e)
         {
-            SaveSettingsFromUI(); // Save settings before exiting
-
-            // Stop all bots if any are running
-            if (_viewModel.IsAnyBotRunning)
+            try
             {
-                _viewModel.StopAllBotsAsync().Wait();
-            }
+                SaveSettingsFromUI(); // Save settings before exiting
 
-            Close();
+                // Stop all bots if any are running
+                if (_viewModel.IsAnyBotRunning)
+                {
+                    AppendLog("Stopping all bots before exit...");
+                    await _viewModel.StopAllBotsAsync();
+                    AppendLog("All bots stopped.");
+                }
+
+                Close();
+            }
+            catch (Exception ex)
+            {
+                AppendLog($"Error during exit: {ex.Message}");
+                // Still close the application even if there's an error
+                Close();
+            }
         }
 
         private void MenuItem_Documentation_Click(object sender, RoutedEventArgs e)

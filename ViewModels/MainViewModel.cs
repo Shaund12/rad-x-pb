@@ -12,6 +12,10 @@ using System.Windows;
 
 namespace RadXPriceBot.ViewModels
 {
+    /// <summary>
+    /// Main view model for the RadX Price Bot application.
+    /// Manages bot configurations, pair data, and bot status information.
+    /// </summary>
     public class MainViewModel : ViewModelBase
     {
         private readonly BotManager _botManager;
@@ -26,6 +30,11 @@ namespace RadXPriceBot.ViewModels
 
         private readonly DatabaseService _databaseService;
 
+        /// <summary>
+        /// Initializes a new instance of the MainViewModel class.
+        /// </summary>
+        /// <param name="logAction">Action to use for logging messages.</param>
+        /// <exception cref="ArgumentNullException">Thrown when logAction is null.</exception>
         public MainViewModel(Action<string> logAction)
         {
             _logAction = logAction ?? throw new ArgumentNullException(nameof(logAction));
@@ -638,27 +647,48 @@ namespace RadXPriceBot.ViewModels
             SaveSettings();
         }
 
+        public async Task RemoveBotConfigAsync(BotConfig config)
+        {
+            if (config == null) return;
+
+            try
+            {
+                // Stop the bot if running
+                if (IsBotConfigRunning(config.Id))
+                {
+                    _logAction($"Stopping bot '{config.Name}' before removal...");
+                    await StopBotAsync(config.Id);
+                }
+
+                BotConfigs.Remove(config);
+
+                if (!BotConfigs.Any())
+                {
+                    AddBotConfig(); // Always have at least one config
+                }
+
+                if (SelectedBotConfig == null || !BotConfigs.Contains(SelectedBotConfig))
+                {
+                    SelectedBotConfig = BotConfigs.FirstOrDefault();
+                }
+
+                SaveSettings();
+                _logAction($"Bot configuration '{config.Name}' removed successfully.");
+            }
+            catch (Exception ex)
+            {
+                _logAction($"Error removing bot config: {ex.Message}");
+                throw;
+            }
+        }
+
+        // Keep synchronous version for backward compatibility but mark it as obsolete
+        [Obsolete("Use RemoveBotConfigAsync instead to avoid blocking the UI thread")]
         public void RemoveBotConfig(BotConfig config)
         {
-            // Stop the bot if running
-            if (IsBotConfigRunning(config.Id))
-            {
-                StopBotAsync(config.Id).Wait();
-            }
-
-            BotConfigs.Remove(config);
-
-            if (!BotConfigs.Any())
-            {
-                AddBotConfig(); // Always have at least one config
-            }
-
-            if (SelectedBotConfig == null || !BotConfigs.Contains(SelectedBotConfig))
-            {
-                SelectedBotConfig = BotConfigs.FirstOrDefault();
-            }
-
-            SaveSettings();
+            // For backward compatibility, run the async version synchronously
+            // This should be replaced with the async version in calling code
+            RemoveBotConfigAsync(config).Wait();
         }
 
         // Start the selected bot
