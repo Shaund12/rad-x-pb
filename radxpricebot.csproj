@@ -3,7 +3,7 @@
   <PropertyGroup>
     <!-- WinExe + WPF on .NET 9 -->
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net8.0-windows</TargetFramework>
+    <TargetFramework>net9.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
 
     <!-- C# niceties -->
@@ -55,10 +55,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Update="Radxpb.png">
-      <Pack>True</Pack>
-      <PackagePath>\</PackagePath>
-    </None>
     <None Update="Radxpb.png">
       <Pack>True</Pack>
       <PackagePath>\</PackagePath>
