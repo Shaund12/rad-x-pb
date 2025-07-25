@@ -52,7 +52,7 @@ namespace RadXPriceBot.ViewModels
 
         private void InitializeSettings()
         {
-            _settings = SettingsService.LoadSettings() ?? new BotSettings();
+            _settings = SettingsService.LoadSettings(_logAction) ?? new BotSettings();
         }
 
         private void InitializeCollections()
@@ -391,7 +391,7 @@ namespace RadXPriceBot.ViewModels
                 NotifyOnSells = config.NotifyOnSells
             }).ToList();
 
-            SettingsService.SaveSettings(_settings);
+            SettingsService.SaveSettings(_settings, _logAction);
         }
 
         public void UpdateBotStatus(string botId, string price, string pairName)

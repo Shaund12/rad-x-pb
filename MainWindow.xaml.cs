@@ -65,8 +65,8 @@ namespace RadXPriceBot
                 if (_viewModel?.Settings?.DpiScaling > 1.0)
                 {
                     double scale = _viewModel.Settings.DpiScaling;
-                    double minWidth = 800 * scale;
-                    double minHeight = 600 * scale;
+                    double minWidth = Constants.DefaultMinWindowWidth * scale;
+                    double minHeight = Constants.DefaultMinWindowHeight * scale;
 
                     if (this.Width < minWidth)
                         this.Width = minWidth;
@@ -184,10 +184,10 @@ namespace RadXPriceBot
             int updateInterval = 30;
             int.TryParse(UpdateIntervalTextBox.Text, out updateInterval);
 
-            int embedIntervalMinutes = 60;
+            int embedIntervalMinutes = Constants.DefaultEmbedIntervalMinutes;
             int.TryParse(EmbedIntervalTextBox.Text, out embedIntervalMinutes);
 
-            int swapCheckIntervalMs = 15000;
+            int swapCheckIntervalMs = Constants.DefaultSwapMonitoringIntervalMs;
             int.TryParse(SwapCheckIntervalTextBox.Text, out swapCheckIntervalMs);
 
             // Use the UpdateMultiBotSettings method to update all properties

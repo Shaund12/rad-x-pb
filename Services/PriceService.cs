@@ -60,7 +60,7 @@ namespace RadXPriceBot.Services
         [Parameter("address", "to", 6, true)] public string To { get; set; }
     }
 
-    public class PriceService
+    public class PriceService : IDisposable
     {
         private readonly Web3 _web3;
         private readonly Contract _routerContract;
@@ -70,6 +70,7 @@ namespace RadXPriceBot.Services
         private readonly Action<string> _logger; // Add logger field
         private readonly DatabaseService _dbService; // Add database service
         private readonly bool _useDbCache; // Flag to use database cache
+        private bool _disposed = false;
 
         private const string USDC_POL_ADDRESS = "0xbCfB3FCa16b12C7756CD6C24f1cC0AC0E38569CF";
         private const string VTRO_ADDRESS = "0xDECAF2f187Cb837a42D26FA364349Abc3e80Aa5D";
@@ -145,22 +146,56 @@ namespace RadXPriceBot.Services
 
         public PriceService(string rpcUrl, string routerAddress, List<string> path, Action<string> logger = null, bool useDbCache = true)
         {
-            _web3 = new Web3(rpcUrl);
-            _routerContract = _web3.Eth.GetContract(RouterAbi, routerAddress);
-            _path = path;
-            _logger = logger ?? (msg => Console.WriteLine(msg)); // Default to Console.WriteLine if no logger provided
-            _useDbCache = useDbCache;
+            if (string.IsNullOrWhiteSpace(rpcUrl))
+                throw new ArgumentException("RPC URL cannot be null or empty", nameof(rpcUrl));
+            if (string.IsNullOrWhiteSpace(routerAddress))
+                throw new ArgumentException("Router address cannot be null or empty", nameof(routerAddress));
+            if (path == null || path.Count < 2)
+                throw new ArgumentException("Path must contain at least 2 token addresses", nameof(path));
 
-            // Initialize database service
-            _dbService = new DatabaseService(_logger);
+            try
+            {
+                _web3 = new Web3(rpcUrl);
+                _routerContract = _web3.Eth.GetContract(RouterAbi, routerAddress);
+                _path = path;
+                _logger = logger ?? (msg => Console.WriteLine(msg)); // Default to Console.WriteLine if no logger provided
+                _useDbCache = useDbCache;
 
-            var factoryAddress = _routerContract
-                .GetFunction("factory")
-                .CallAsync<string>()
-                .ConfigureAwait(false)
-                .GetAwaiter()
-                .GetResult();
-            _factoryContract = _web3.Eth.GetContract(FactoryAbi, factoryAddress);
+                // Initialize database service
+                _dbService = new DatabaseService(_logger);
+
+                // Get factory address with error handling
+                InitializeFactoryContract();
+            }
+            catch (Exception ex)
+            {
+                _logger?.Invoke($"Error initializing PriceService: {ex.Message}");
+                throw;
+            }
+        }
+
+        private void InitializeFactoryContract()
+        {
+            try
+            {
+                var factoryAddress = _routerContract
+                    .GetFunction("factory")
+                    .CallAsync<string>()
+                    .ConfigureAwait(false)
+                    .GetAwaiter()
+                    .GetResult();
+                    
+                if (string.IsNullOrWhiteSpace(factoryAddress))
+                    throw new InvalidOperationException("Failed to retrieve factory address from router");
+                    
+                _factoryContract = _web3.Eth.GetContract(FactoryAbi, factoryAddress);
+                _logger?.Invoke($"Initialized PriceService with factory: {factoryAddress}");
+            }
+            catch (Exception ex)
+            {
+                _logger?.Invoke($"Error getting factory address from router: {ex.Message}");
+                throw new InvalidOperationException("Failed to initialize factory contract", ex);
+            }
         }
 
         public async Task<decimal> GetPriceAsync(decimal inputAmount = 1.0m)
@@ -1051,5 +1086,39 @@ namespace RadXPriceBot.Services
             [Nethereum.ABI.FunctionEncoding.Attributes.Parameter("uint32", "_blockTimestampLast", 3)]
             public uint BlockTimestampLast { get; set; }
         }
+
+        #region IDisposable Implementation
+
+        public void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!_disposed && disposing)
+            {
+                try
+                {
+                    _logger?.Invoke("Disposing PriceService resources...");
+                    
+                    // Web3 client cleanup
+                    _web3?.Dispose();
+                    
+                    _logger?.Invoke("PriceService disposed successfully.");
+                }
+                catch (Exception ex)
+                {
+                    _logger?.Invoke($"Error during PriceService disposal: {ex.Message}");
+                }
+                finally
+                {
+                    _disposed = true;
+                }
+            }
+        }
+
+        #endregion
     }
 }
