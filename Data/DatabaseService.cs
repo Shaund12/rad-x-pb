@@ -46,13 +46,14 @@ namespace RadXPriceBot.Data
 
         public async Task<TokenEntity> GetOrCreateTokenAsync(TokenInfo tokenInfo)
         {
-            if (tokenInfo == null) return null;
+            if (tokenInfo == null || string.IsNullOrWhiteSpace(tokenInfo.Address)) 
+                return null;
 
             try
             {
                 using (var context = new AppDbContext())
                 {
-                    // Convert address to uppercase to ensure case-insensitive comparison
+                    // Store normalized address and use it in comparison to avoid table scan
                     var normalizedAddress = tokenInfo.Address.ToUpperInvariant();
 
                     // Try to find existing token using normalized comparison
@@ -78,6 +79,51 @@ namespace RadXPriceBot.Data
                         _logger($"Created new token in database: {token.Symbol} ({token.Address})");
                     }
                     else
+                    {
+                        // Update existing token with new information if different
+                        bool needsUpdate = false;
+                        
+                        if (token.Symbol != tokenInfo.Symbol)
+                        {
+                            token.Symbol = tokenInfo.Symbol;
+                            needsUpdate = true;
+                        }
+                        
+                        if (token.Name != tokenInfo.Name)
+                        {
+                            token.Name = tokenInfo.Name;
+                            needsUpdate = true;
+                        }
+                        
+                        if (Math.Abs(token.TotalSupply - tokenInfo.TotalSupply) > 0.001m)
+                        {
+                            token.TotalSupply = tokenInfo.TotalSupply;
+                            needsUpdate = true;
+                        }
+                        
+                        if (Math.Abs(token.UsdPrice - tokenInfo.UsdPrice) > 0.000001m)
+                        {
+                            token.UsdPrice = tokenInfo.UsdPrice;
+                            needsUpdate = true;
+                        }
+
+                        if (needsUpdate)
+                        {
+                            token.LastUpdated = DateTime.UtcNow;
+                            await context.SaveChangesAsync();
+                            _logger($"Updated token in database: {token.Symbol}");
+                        }
+                    }
+
+                    return token;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger($"Error in GetOrCreateTokenAsync: {ex.Message}");
+                return null;
+            }
+        }
                     {
                         // Update token data
                         bool changes = false;
@@ -132,14 +178,19 @@ namespace RadXPriceBot.Data
 
         public async Task<TokenEntity> GetTokenByAddressAsync(string address)
         {
+            if (string.IsNullOrWhiteSpace(address))
+                return null;
+
             try
             {
                 using (var context = new AppDbContext())
                 {
-                    // Convert address to uppercase for case-insensitive comparison
+                    // Store normalized address and use it in comparison to avoid table scan
                     var normalizedAddress = address.ToUpperInvariant();
 
+                    // Use AsNoTracking for read-only queries to improve performance
                     return await context.Tokens
+                        .AsNoTracking()
                         .FirstOrDefaultAsync(t => t.Address.ToUpper() == normalizedAddress);
                 }
             }

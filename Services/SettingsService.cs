@@ -22,20 +22,20 @@ namespace RadXPriceBot.Services
         public int UpdateIntervalSeconds { get; set; } = 30;
 
         public bool SendPeriodicEmbeds { get; set; } = true;
-        public int EmbedIntervalMinutes { get; set; } = 60;  // Default: once per hour
+        public int EmbedIntervalMinutes { get; set; } = Constants.DefaultEmbedIntervalMinutes;  // Default: once per hour
         public string EmbedChannelId { get; set; } = "";     // Discord channel ID to send embeds to
-        public string EmbedColor { get; set; } = "#50E999";  // Default color in hex format
+        public string EmbedColor { get; set; } = Constants.DefaultEmbedColor;  // Default color in hex format
         public bool IncludeChartInEmbed { get; set; } = true;
         public bool IncludeTokenInfoInEmbed { get; set; } = true;
         public bool IncludeLiquidityInfoInEmbed { get; set; } = true;
         // New properties for swap monitoring
         public bool MonitorSwapTransactions { get; set; } = true;  // Enable by default
         public string SwapNotificationChannelId { get; set; } = ""; // Discord channel ID for swap notifications
-        public int SwapCheckIntervalMs { get; set; } = 30000; // Check for new transactions every 15 seconds
+        public int SwapCheckIntervalMs { get; set; } = Constants.DefaultSwapMonitoringIntervalMs;
 
         // Add these new properties for minimum thresholds
-        public decimal MinimumBuyThresholdUsd { get; set; } = 10.0m; // Only notify for buys >= $10
-        public decimal MinimumSellThresholdUsd { get; set; } = 10.0m; // Only notify for sells >= $10
+        public decimal MinimumBuyThresholdUsd { get; set; } = Constants.DefaultMinBuyThresholdUsd;
+        public decimal MinimumSellThresholdUsd { get; set; } = Constants.DefaultMinSellThresholdUsd;
         public bool NotifyOnBuys { get; set; } = true;  // Whether to notify on buy transactions
         public bool NotifyOnSells { get; set; } = true; // Whether to notify on sell transactions
     }
@@ -75,9 +75,9 @@ namespace RadXPriceBot.Services
         public bool? DebugMode { get; set; } = false;
         public bool? SaveLogsToFile { get; set; } = true;
         public bool UseDbCache { get; set; } = true;
-        public int PriceHistoryRetentionDays { get; set; } = 30;
+        public int PriceHistoryRetentionDays { get; set; } = Constants.DefaultPriceHistoryRetentionDays;
         public bool EnableHistoricalDataCollection { get; set; } = true;
-        public int MaxPriceHistoryPointsToReturn { get; set; } = 1000;
+        public int MaxPriceHistoryPointsToReturn { get; set; } = Constants.MaxPriceHistoryPoints;
     }
 
     public static class SettingsService
@@ -87,42 +87,98 @@ namespace RadXPriceBot.Services
             "RadXPriceBot",
             "settings.json");
 
-        public static void SaveSettings(BotSettings settings)
+        private static readonly Action<string> DefaultLogger = msg => Console.WriteLine($"[SettingsService] {msg}");
+
+        public static void SaveSettings(BotSettings settings, Action<string> logger = null)
         {
+            if (settings == null)
+                throw new ArgumentNullException(nameof(settings));
+
+            var log = logger ?? DefaultLogger;
+
             try
             {
+                log("Saving settings...");
+                
                 string directoryPath = Path.GetDirectoryName(SettingsFilePath);
                 if (!Directory.Exists(directoryPath))
                 {
                     Directory.CreateDirectory(directoryPath);
+                    log($"Created settings directory: {directoryPath}");
                 }
 
-                var options = new JsonSerializerOptions { WriteIndented = true };
+                var options = new JsonSerializerOptions 
+                { 
+                    WriteIndented = true,
+                    DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
+                };
+                
                 string jsonString = JsonSerializer.Serialize(settings, options);
                 File.WriteAllText(SettingsFilePath, jsonString);
+                
+                log($"Settings saved successfully to: {SettingsFilePath}");
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Failed to save settings: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                var errorMessage = $"Failed to save settings: {ex.Message}";
+                log($"ERROR: {errorMessage}");
+                
+                // Only show MessageBox if in a WPF context
+                if (System.Windows.Application.Current != null)
+                {
+                    MessageBox.Show(errorMessage, "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+                
+                throw; // Re-throw to allow caller to handle
             }
         }
 
-        public static BotSettings LoadSettings()
+        public static BotSettings LoadSettings(Action<string> logger = null)
         {
+            var log = logger ?? DefaultLogger;
+
             try
             {
                 if (File.Exists(SettingsFilePath))
                 {
+                    log($"Loading settings from: {SettingsFilePath}");
+                    
                     string jsonString = File.ReadAllText(SettingsFilePath);
-                    return JsonSerializer.Deserialize<BotSettings>(jsonString);
+                    
+                    if (string.IsNullOrWhiteSpace(jsonString))
+                    {
+                        log("Settings file is empty, returning default settings");
+                        return new BotSettings();
+                    }
+
+                    var settings = JsonSerializer.Deserialize<BotSettings>(jsonString);
+                    log("Settings loaded successfully");
+                    return settings ?? new BotSettings();
+                }
+                else
+                {
+                    log("Settings file not found, returning default settings");
                 }
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Failed to load settings: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                var errorMessage = $"Failed to load settings: {ex.Message}";
+                log($"ERROR: {errorMessage}");
+                
+                // Only show MessageBox if in a WPF context
+                if (System.Windows.Application.Current != null)
+                {
+                    MessageBox.Show(errorMessage, "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+                
+                log("Returning default settings due to error");
             }
 
             return new BotSettings();
         }
+
+        public static string GetSettingsFilePath() => SettingsFilePath;
+
+        public static bool SettingsFileExists() => File.Exists(SettingsFilePath);
     }
 }

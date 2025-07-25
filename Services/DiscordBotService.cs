@@ -19,7 +19,7 @@ namespace RadXPriceBot.Services
         public PairInfo PairInfo { get; set; }
     }
 
-    public class DiscordBotService
+    public class DiscordBotService : IDisposable
     {
         private readonly string _token;
         private readonly ulong _guildId;
@@ -38,6 +38,7 @@ namespace RadXPriceBot.Services
         private TokenInfo _token1Info;
         private CancellationTokenSource _cts;
         private bool _isRunning;
+        private bool _disposed = false;
 
         // Dictionary to map token symbols to their image URLs
         private Dictionary<string, string> _tokenImageUrls = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -2887,5 +2888,69 @@ namespace RadXPriceBot.Services
                 await command.FollowupAsync("❌ Failed to generate price chart. Check logs.");
             }
         }
+
+        #region IDisposable Implementation
+
+        public void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!_disposed && disposing)
+            {
+                try
+                {
+                    OnLog("Disposing DiscordBotService resources...");
+
+                    // Stop all timers
+                    _updateTimer?.Stop();
+                    _updateTimer?.Dispose();
+
+                    _embedTimer?.Stop();
+                    _embedTimer?.Dispose();
+
+                    _historyUpdateTimer?.Stop();
+                    _historyUpdateTimer?.Dispose();
+
+                    _transactionMonitorTimer?.Stop();
+                    _transactionMonitorTimer?.Dispose();
+
+                    // Cancel any ongoing operations
+                    _cts?.Cancel();
+                    _cts?.Dispose();
+
+                    // Disconnect and dispose Discord client
+                    if (_client != null)
+                    {
+                        if (_client.ConnectionState == ConnectionState.Connected)
+                        {
+                            _client.StopAsync().Wait(TimeSpan.FromSeconds(5));
+                        }
+                        _client.Dispose();
+                    }
+
+                    // Clear collections
+                    _tokenImageUrls?.Clear();
+                    _priceHistory?.Clear();
+                    _priceTimestamps?.Clear();
+                    _lastProcessedTransactions?.Clear();
+
+                    OnLog("DiscordBotService disposed successfully.");
+                }
+                catch (Exception ex)
+                {
+                    OnLog($"Error during disposal: {ex.Message}");
+                }
+                finally
+                {
+                    _disposed = true;
+                }
+            }
+        }
+
+        #endregion
     }
 }

@@ -12,7 +12,7 @@ using System.Windows.Media; // Added for SolidColorBrush
 
 namespace RadXPriceBot.ViewModels
 {
-    public class BotStatusViewModel : INotifyPropertyChanged
+    public class BotStatusViewModel : ViewModelBase
     {
         private readonly DatabaseService _databaseService;
         private bool _isHistoricalDataLoaded = false;
@@ -57,8 +57,6 @@ namespace RadXPriceBot.ViewModels
             _lastUpdated = DateTime.Now.ToString("HH:mm:ss");
         }
 
-        public event PropertyChangedEventHandler PropertyChanged;
-
         public string BotId { get; set; }
         public string BotName { get; set; }
 
@@ -70,10 +68,10 @@ namespace RadXPriceBot.ViewModels
                 if (_pairName != value)
                 {
                     _pairName = value;
-                    NotifyPropertyChanged();
+                    OnPropertyChanged();
                     UpdatePairInfoVisuals();
                     // Notify dependent properties
-                    NotifyPropertyChanged(nameof(EnhancedPairDisplay));
+                    OnPropertyChanged(nameof(EnhancedPairDisplay));
                 }
             }
         }
@@ -90,9 +88,9 @@ namespace RadXPriceBot.ViewModels
                     decimal newPrice = ExtractPriceValue(value);
 
                     _currentPrice = value;
-                    NotifyPropertyChanged();
+                    OnPropertyChanged();
                     // Notify dependent properties
-                    NotifyPropertyChanged(nameof(PriceWithTrend));
+                    OnPropertyChanged(nameof(PriceWithTrend));
 
                     // Only update indicators if we have valid prices
                     if (oldPrice > 0 && newPrice > 0)
@@ -127,12 +125,12 @@ namespace RadXPriceBot.ViewModels
                 if (_isRunning != value)
                 {
                     _isRunning = value;
-                    NotifyPropertyChanged();
-                    NotifyPropertyChanged(nameof(CanStart)); // Add this line
+                    OnPropertyChanged();
+                    OnPropertyChanged(nameof(CanStart)); // Add this line
                     Status = _isRunning ? "Running" : "Stopped";
                     UpdateStatusEmoji();
                     // Notify dependent properties
-                    NotifyPropertyChanged(nameof(StatusWithEmoji));
+                    OnPropertyChanged(nameof(StatusWithEmoji));
                 }
             }
         }
@@ -146,10 +144,10 @@ namespace RadXPriceBot.ViewModels
                 if (_status != value)
                 {
                     _status = value;
-                    NotifyPropertyChanged();
+                    OnPropertyChanged();
                     UpdateStatusEmoji();
                     // Notify dependent properties
-                    NotifyPropertyChanged(nameof(StatusWithEmoji));
+                    OnPropertyChanged(nameof(StatusWithEmoji));
                 }
             }
         }
@@ -162,7 +160,7 @@ namespace RadXPriceBot.ViewModels
                 if (_lastUpdated != value)
                 {
                     _lastUpdated = value;
-                    NotifyPropertyChanged();
+                    OnPropertyChanged();
                 }
             }
         }
@@ -173,10 +171,10 @@ namespace RadXPriceBot.ViewModels
             set
             {
                 _pairInfo = value;
-                NotifyPropertyChanged();
+                OnPropertyChanged();
                 UpdatePairInfoVisuals();
                 // Notify dependent properties
-                NotifyPropertyChanged(nameof(EnhancedPairDisplay));
+                OnPropertyChanged(nameof(EnhancedPairDisplay));
 
                 // If we get a new pair info, we should reset historical data
                 _isHistoricalDataLoaded = false;
@@ -193,9 +191,9 @@ namespace RadXPriceBot.ViewModels
                 if (_volume24h != value)
                 {
                     _volume24h = value;
-                    NotifyPropertyChanged();
+                    OnPropertyChanged();
                     // Notify dependent properties
-                    NotifyPropertyChanged(nameof(DetailedLiquidityInfo));
+                    OnPropertyChanged(nameof(DetailedLiquidityInfo));
                 }
             }
         }
@@ -208,9 +206,9 @@ namespace RadXPriceBot.ViewModels
                 if (_priceChange24h != value)
                 {
                     _priceChange24h = value;
-                    NotifyPropertyChanged();
+                    OnPropertyChanged();
                     // Notify dependent properties
-                    NotifyPropertyChanged(nameof(PriceChangeBrush));
+                    OnPropertyChanged(nameof(PriceChangeBrush));
                 }
             }
         }
@@ -223,9 +221,9 @@ namespace RadXPriceBot.ViewModels
                 if (_priceChange7d != value)
                 {
                     _priceChange7d = value;
-                    NotifyPropertyChanged();
+                    OnPropertyChanged();
                     // Notify dependent properties
-                    NotifyPropertyChanged(nameof(PriceChangeBrush));
+                    OnPropertyChanged(nameof(PriceChangeBrush));
                 }
             }
         }
@@ -238,9 +236,9 @@ namespace RadXPriceBot.ViewModels
                 if (_liquidityChange24h != value)
                 {
                     _liquidityChange24h = value;
-                    NotifyPropertyChanged();
+                    OnPropertyChanged();
                     // Notify dependent properties
-                    NotifyPropertyChanged(nameof(DetailedLiquidityInfo));
+                    OnPropertyChanged(nameof(DetailedLiquidityInfo));
                 }
             }
         }
@@ -253,9 +251,9 @@ namespace RadXPriceBot.ViewModels
                 if (_currentLiquidity != value)
                 {
                     _currentLiquidity = value;
-                    NotifyPropertyChanged();
+                    OnPropertyChanged();
                     // Notify dependent properties
-                    NotifyPropertyChanged(nameof(DetailedLiquidityInfo));
+                    OnPropertyChanged(nameof(DetailedLiquidityInfo));
                 }
             }
         }
@@ -268,7 +266,7 @@ namespace RadXPriceBot.ViewModels
                 if (_holdersCount != value)
                 {
                     _holdersCount = value;
-                    NotifyPropertyChanged();
+                    OnPropertyChanged();
                 }
             }
         }
@@ -281,9 +279,9 @@ namespace RadXPriceBot.ViewModels
                 if (_priceChangeEmoji != value)
                 {
                     _priceChangeEmoji = value;
-                    NotifyPropertyChanged();
+                    OnPropertyChanged();
                     // Notify dependent properties
-                    NotifyPropertyChanged(nameof(PriceWithTrend));
+                    OnPropertyChanged(nameof(PriceWithTrend));
                 }
             }
         }
@@ -297,7 +295,7 @@ namespace RadXPriceBot.ViewModels
                 if (_priceChange15Min != value)
                 {
                     _priceChange15Min = value;
-                    NotifyPropertyChanged();
+                    OnPropertyChanged();
                 }
             }
         }
@@ -310,7 +308,7 @@ namespace RadXPriceBot.ViewModels
                 if (_priceChange30Min != value)
                 {
                     _priceChange30Min = value;
-                    NotifyPropertyChanged();
+                    OnPropertyChanged();
                 }
             }
         }
@@ -323,7 +321,7 @@ namespace RadXPriceBot.ViewModels
                 if (_priceChange1Hour != value)
                 {
                     _priceChange1Hour = value;
-                    NotifyPropertyChanged();
+                    OnPropertyChanged();
                 }
             }
         }
@@ -336,7 +334,7 @@ namespace RadXPriceBot.ViewModels
                 if (_priceChange4Hour != value)
                 {
                     _priceChange4Hour = value;
-                    NotifyPropertyChanged();
+                    OnPropertyChanged();
                 }
             }
         }
@@ -466,11 +464,6 @@ namespace RadXPriceBot.ViewModels
             }
         }
 
-
-        private void NotifyPropertyChanged([CallerMemberName] string propertyName = "")
-        {
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
-        }
 
         private async Task LoadHistoricalDataAsync()
         {
